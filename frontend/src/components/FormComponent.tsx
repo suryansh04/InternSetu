@@ -491,7 +491,7 @@ export default function ProfileForm() {
                     onChange={handleInputChange}
                   />
                   <p className="text-sm text-muted-foreground">
-                    This is your public display name.
+                    This is your display name.
                   </p>
                   {errors.name && (
                     <p className="text-sm text-destructive">{errors.name}</p>
@@ -583,7 +583,7 @@ export default function ProfileForm() {
                     onChange={handleInputChange}
                   />
                   <p className="text-sm text-muted-foreground">
-                    How many months of experience or availability do you have?
+                    How many months of availability do you have?
                   </p>
                   {errors.duration_month && (
                     <p className="text-sm text-destructive">
