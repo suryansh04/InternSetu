@@ -6,7 +6,6 @@ exports.extractPdf = async (req, res) => {
   try {
     const buffer = fs.readFileSync(req.file.path);
     const data = await pdf(buffer);
-    // data.text contains the full extracted text
     res.json({ text: data.text });
   } catch (err) {
     console.error(err);

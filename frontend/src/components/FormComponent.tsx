@@ -1,5 +1,4 @@
 // "use client";
-
 // import { useState } from "react";
 // import { Button } from "@/shadcn/ui/button";
 // import {
@@ -9,12 +8,14 @@
 //   CardHeader,
 //   CardTitle,
 // } from "@/shadcn/ui/card";
+// import { useNavigate } from "react-router-dom";
 // import { Input } from "@/shadcn/ui/input";
 // import { Label } from "@/shadcn/ui/label";
 // import { toast } from "sonner";
-// import { X, Plus, Upload, FileText } from "lucide-react";
+// import { X, Plus, Upload, FileText, Loader2 } from "lucide-react";
 
 // export default function ProfileForm() {
+//   const navigate = useNavigate();
 //   const [formData, setFormData] = useState({
 //     name: "",
 //     skills: [],
@@ -26,6 +27,7 @@
 
 //   const [skillInput, setSkillInput] = useState("");
 //   const [interestInput, setInterestInput] = useState("");
+//   const [isProcessing, setIsProcessing] = useState(false);
 
 //   const [errors, setErrors] = useState({});
 
@@ -76,18 +78,139 @@
 //     }
 //   };
 
-//   const handleResumeUpload = (e) => {
+//   // Extract text from PDF using PDF.js
+//   // Replace your extractTextFromPDF with this one
+//   const extractTextFromPDF = async (file) => {
+//     try {
+//       const formData = new FormData();
+//       formData.append("file", file);
+
+//       const response = await fetch("http://localhost:3000/api/extract", {
+//         method: "POST",
+//         body: formData,
+//       });
+
+//       if (!response.ok) {
+//         throw new Error("Failed to extract text from server");
+//       }
+
+//       const data = await response.json();
+//       console.log("Extracted text:", data.text);
+//       return data.text; // backend sends { text: "...extracted text..." }
+//     } catch (error) {
+//       console.error("Server extraction error:", error);
+//       throw error;
+//     }
+//   };
+
+//   // Call Gemini API to extract structured data
+//   const extractDataWithGemini = async (text) => {
+//     try {
+//       // Replace with your actual Gemini API key
+//       const API_KEY =
+//         import.meta.env.VITE_GEMINI_API_KEY ||
+//         "***REMOVED***";
+
+//       if (API_KEY === "YOUR_GEMINI_API_KEY") {
+//         throw new Error("Please add your Gemini API key");
+//       }
+
+//       const prompt = `Extract the following information from this resume text and return it as a JSON object:
+//       - name: Full name of the person
+//       - location: City, state/country (format as "City, Country")
+//       - skills: Array of technical skills, programming languages, frameworks, tools
+//       - interests: Based on Skills judge person interest like if person knows python, he might be interested in AI/ML, if knows web dev skills, interested in web dev etc. Return as array of strings
+//       - experience_months: Estimate total work experience in months (if not clear, return null)
+
+//       Resume text:
+//       ${text}
+
+//       Return only valid JSON in this exact format:
+//       {
+//         "name": "string or null",
+//         "location": "string or null",
+//         "skills": ["skill1", "skill2"],
+//         "interests": ["interest1", "interest2"],
+//         "experience_months": number or null
+//       }`;
+
+//       const response = await fetch(
+//         `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${API_KEY}`,
+//         {
+//           method: "POST",
+//           headers: {
+//             "Content-Type": "application/json",
+//           },
+//           body: JSON.stringify({
+//             contents: [
+//               {
+//                 parts: [
+//                   {
+//                     text: prompt,
+//                   },
+//                 ],
+//               },
+//             ],
+//           }),
+//         }
+//       );
+
+//       if (!response.ok) {
+//         throw new Error(`Gemini API error: ${response.status}`);
+//       }
+
+//       const data = await response.json();
+//       const generatedText = data.candidates[0].content.parts[0].text;
+
+//       // Extract JSON from the response
+//       const jsonMatch = generatedText.match(/\{[\s\S]*\}/);
+//       if (!jsonMatch) {
+//         throw new Error("No valid JSON found in response");
+//       }
+
+//       return JSON.parse(jsonMatch[0]);
+//     } catch (error) {
+//       console.error("Error calling Gemini API:", error);
+//       throw new Error("Failed to process resume with AI");
+//     }
+//   };
+
+//   // Auto-fill form with extracted data
+//   const autoFillForm = (extractedData) => {
+//     setFormData((prev) => ({
+//       ...prev,
+//       name: extractedData.name || prev.name,
+//       location: extractedData.location || prev.location,
+//       skills:
+//         extractedData.skills && extractedData.skills.length > 0
+//           ? extractedData.skills
+//           : prev.skills,
+//       interests:
+//         extractedData.interests && extractedData.interests.length > 0
+//           ? extractedData.interests
+//           : prev.interests,
+//       duration_month: extractedData.experience_months || prev.duration_month,
+//     }));
+
+//     // Clear any existing errors for fields that were filled
+//     const newErrors = { ...errors };
+//     if (extractedData.name) delete newErrors.name;
+//     if (extractedData.location) delete newErrors.location;
+//     if (extractedData.skills && extractedData.skills.length > 0)
+//       delete newErrors.skills;
+//     if (extractedData.interests && extractedData.interests.length > 0)
+//       delete newErrors.interests;
+//     if (extractedData.experience_months) delete newErrors.duration_month;
+//     setErrors(newErrors);
+//   };
+
+//   const handleResumeUpload = async (e) => {
 //     const file = e.target.files[0];
 //     if (file) {
-//       // Validate file type (PDF, DOC, DOCX)
-//       const allowedTypes = [
-//         "application/pdf",
-//         "application/msword",
-//         "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-//       ];
-//       if (!allowedTypes.includes(file.type)) {
+//       // Validate file type (PDF only)
+//       if (file.type !== "application/pdf") {
 //         toast("Invalid file type", {
-//           description: "Please upload a PDF, DOC, or DOCX file.",
+//           description: "Please upload a PDF file only.",
 //         });
 //         return;
 //       }
@@ -105,9 +228,42 @@
 //         resume: file,
 //       }));
 
-//       toast("Resume uploaded successfully!", {
-//         description: `${file.name} has been uploaded.`,
-//       });
+//       setIsProcessing(true);
+
+//       try {
+//         // Extract text from PDF
+//         toast("Processing resume...", {
+//           description: "Extracting text from PDF...",
+//         });
+
+//         const extractedText = await extractTextFromPDF(file);
+
+//         if (!extractedText.trim()) {
+//           throw new Error("No text found in PDF");
+//         }
+
+//         // Process with Gemini API
+//         toast("Analyzing resume...", {
+//           description: "Using AI to extract information...",
+//         });
+
+//         const extractedData = await extractDataWithGemini(extractedText);
+
+//         // Auto-fill the form
+//         autoFillForm(extractedData);
+
+//         toast("Resume processed successfully!", {
+//           description: `${file.name} has been uploaded and form has been auto-filled.`,
+//         });
+//       } catch (error) {
+//         console.error("Error processing resume:", error);
+//         toast("Error processing resume", {
+//           description:
+//             error.message || "Please try again or fill the form manually.",
+//         });
+//       } finally {
+//         setIsProcessing(false);
+//       }
 //     }
 //   };
 
@@ -178,14 +334,45 @@
 //     }
 //   };
 
-//   const handleSubmit = (e) => {
+//   const handleSubmit = async (e) => {
 //     e.preventDefault();
 
 //     if (validateForm()) {
-//       console.log(formData);
+//       const interestArrtoString = formData.interests.join(", ");
+//       const duplicateForm = { ...formData, interests: interestArrtoString };
+//       delete duplicateForm.resume; // Remove resume file from submission data
+//       console.log(duplicateForm);
 //       toast("Form submitted successfully!", {
 //         description: "Your profile information has been saved.",
 //       });
+//       // NEW CODE
+
+//       setIsProcessing(true);
+//       try {
+//         const payload = duplicateForm;
+
+//         const res = await fetch("http://localhost:8000/match", {
+//           method: "POST",
+//           headers: { "Content-Type": "application/json" },
+//           body: JSON.stringify(payload),
+//         });
+
+//         if (!res.ok) throw new Error(await res.text());
+//         const data = await res.json();
+
+//         sessionStorage.setItem("matches", JSON.stringify(data.matches || []));
+//         toast("Matches fetched successfully!", {
+//           description: `Found ${data.count || 0} matches`,
+//         });
+
+//         navigate("/main");
+//       } catch (err) {
+//         toast("Error submitting form", {
+//           description: err.message || "Please try again.",
+//         });
+//       } finally {
+//         setIsProcessing(false);
+//       }
 //     }
 //   };
 
@@ -205,7 +392,7 @@
 //           <CardContent>
 //             <div className="space-y-6">
 //               <div className="space-y-2">
-//                 <Label htmlFor="resume">Upload Your Resume</Label>
+//                 <Label htmlFor="resume">Upload Your Resume (PDF Only)</Label>
 //                 <div className="space-y-3">
 //                   {formData.resume ? (
 //                     <div className="flex items-center gap-3 p-3 border border-border rounded-md bg-secondary/50">
@@ -217,6 +404,12 @@
 //                         <p className="text-xs text-muted-foreground">
 //                           {(formData.resume.size / 1024 / 1024).toFixed(2)} MB
 //                         </p>
+//                         {isProcessing && (
+//                           <p className="text-xs text-blue-600 flex items-center gap-1">
+//                             <Loader2 className="h-3 w-3 animate-spin" />
+//                             Processing...
+//                           </p>
+//                         )}
 //                       </div>
 //                       <Button
 //                         type="button"
@@ -224,6 +417,7 @@
 //                         size="sm"
 //                         onClick={removeResume}
 //                         className="h-8 w-8 p-0"
+//                         disabled={isProcessing}
 //                       >
 //                         <X className="h-4 w-4" />
 //                       </Button>
@@ -233,18 +427,25 @@
 //                       <Input
 //                         id="resume"
 //                         type="file"
-//                         accept=".pdf,.doc,.docx"
+//                         accept=".pdf"
 //                         onChange={handleResumeUpload}
 //                         className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+//                         disabled={isProcessing}
 //                       />
 //                       <div className="flex items-center gap-3 p-4 border-2 border-dashed border-border rounded-md hover:border-primary/50 transition-colors cursor-pointer">
-//                         <Upload className="h-5 w-5 text-muted-foreground" />
+//                         {isProcessing ? (
+//                           <Loader2 className="h-5 w-5 text-muted-foreground animate-spin" />
+//                         ) : (
+//                           <Upload className="h-5 w-5 text-muted-foreground" />
+//                         )}
 //                         <div>
 //                           <p className="text-sm font-medium">
-//                             Upload your resume
+//                             {isProcessing
+//                               ? "Processing resume..."
+//                               : "Upload your resume"}
 //                           </p>
 //                           <p className="text-xs text-muted-foreground">
-//                             PDF, DOC, or DOCX (max 5MB)
+//                             PDF only (max 5MB)
 //                           </p>
 //                         </div>
 //                       </div>
@@ -252,7 +453,8 @@
 //                   )}
 //                 </div>
 //                 <p className="text-sm text-muted-foreground">
-//                   Upload your resume to auto-fill some fields or for reference.
+//                   Upload your resume to auto-fill the form fields using AI
+//                   extraction.
 //                 </p>
 //               </div>
 
@@ -262,12 +464,12 @@
 //                 </div>
 //                 <div className="relative flex justify-center text-xs uppercase">
 //                   <span className="bg-background px-2 text-muted-foreground">
-//                     or
+//                     or fill manually
 //                   </span>
 //                 </div>
 //               </div>
 
-//               <form onSubmit={handleSubmit} className="space-y-6">
+//               <div className="space-y-6">
 //                 <div className="space-y-2">
 //                   <Label htmlFor="name">Full Name</Label>
 //                   <Input
@@ -434,10 +636,13 @@
 //                   )}
 //                 </div>
 
-//                 <Button type="submit" className="w-full">
+//                 <Button
+//                   onClick={handleSubmit}
+//                   className="w-full cursor-pointer"
+//                 >
 //                   Submit Profile
 //                 </Button>
-//               </form>
+//               </div>
 //             </div>
 //           </CardContent>
 //         </Card>
@@ -446,10 +651,8 @@
 //   );
 // }
 
-// //---------------------------------------------------NEW CODE -------------------------------------------------------------------------------------
-
+// //////////////////////////////////////////////////////////// NEW CODE BELOW ////////////////////////////////////////////////////////////////
 "use client";
-
 import { useState } from "react";
 import { Button } from "@/shadcn/ui/button";
 import {
@@ -459,12 +662,14 @@ import {
   CardHeader,
   CardTitle,
 } from "@/shadcn/ui/card";
+import { useNavigate } from "react-router-dom";
 import { Input } from "@/shadcn/ui/input";
 import { Label } from "@/shadcn/ui/label";
 import { toast } from "sonner";
 import { X, Plus, Upload, FileText, Loader2 } from "lucide-react";
 
 export default function ProfileForm() {
+  const navigate = useNavigate();
   const [formData, setFormData] = useState({
     name: "",
     skills: [],
@@ -577,7 +782,7 @@ export default function ProfileForm() {
       Return only valid JSON in this exact format:
       {
         "name": "string or null",
-        "location": "string or null", 
+        "location": "string or null",
         "skills": ["skill1", "skill2"],
         "interests": ["interest1", "interest2"],
         "experience_months": number or null
@@ -783,14 +988,56 @@ export default function ProfileForm() {
     }
   };
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
 
     if (validateForm()) {
-      console.log(formData);
-      toast("Form submitted successfully!", {
-        description: "Your profile information has been saved.",
+      const interestArrtoString = formData.interests.join(", ");
+      const duplicateForm = { ...formData, interests: interestArrtoString };
+      delete duplicateForm.resume; // Remove resume file from submission data
+      console.log(duplicateForm);
+
+      setIsProcessing(true);
+
+      toast("Processing your profile...", {
+        description: "Analyzing your information and finding matches...",
       });
+
+      try {
+        const payload = duplicateForm;
+
+        toast("Finding your matches...", {
+          description:
+            "Searching through our database for the best opportunities...",
+        });
+
+        const res = await fetch("http://localhost:8000/match", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
+        });
+
+        if (!res.ok) throw new Error(await res.text());
+        const data = await res.json();
+
+        sessionStorage.setItem("matches", JSON.stringify(data.matches || []));
+
+        toast("Matches found successfully!", {
+          description: `Found ${
+            data.matches?.length || 0
+          } perfect matches for you!`,
+        });
+
+        setTimeout(() => {
+          navigate("/main");
+        }, 1000);
+      } catch (err) {
+        toast("Error finding matches", {
+          description: err.message || "Please try again.",
+        });
+      } finally {
+        setIsProcessing(false);
+      }
     }
   };
 
@@ -1057,8 +1304,16 @@ export default function ProfileForm() {
                 <Button
                   onClick={handleSubmit}
                   className="w-full cursor-pointer"
+                  disabled={isProcessing}
                 >
-                  Submit Profile
+                  {isProcessing ? (
+                    <>
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      Finding Your Matches...
+                    </>
+                  ) : (
+                    "Submit Profile"
+                  )}
                 </Button>
               </div>
             </div>
