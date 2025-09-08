@@ -7,5 +7,4 @@ app.use(cors());
 app.use(morgan("dev"));
 app.use(express.json());
 app.use("/api", extractPDFroute);
-
 module.exports = app;
