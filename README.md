@@ -40,7 +40,7 @@ Finding an internship usually means scrolling long lists and guessing which ones
       Drop in a PDF. The API extracts the text and Gemini turns it into a structured profile (name, city, skills, interests, months free) that you check and save. Gemini's JSON schema mode guarantees a well-formed answer, and the server validates it again before it reaches the form.
     </td>
     <td width="50%" valign="top">
-      <img src=".github/assets/matches.webp" alt="A match with its score breakdown expanded">
+      <img src=".github/assets/score-breakdown.webp" alt="A match card with its score breakdown open: required skills 67%, preferred skills, location and availability 100%, similarity 77%">
       <h3>Matches with a reason</h3>
       Every internship gets a score out of 100 from five parts: required skills, preferred skills, location, availability, and how close the role is in meaning to your profile. Open <i>Why this score?</i> to see each part. Skills you already have are ticked.
     </td>
@@ -74,14 +74,14 @@ flowchart LR
     API --> CL[("Cloudinary<br/>recordings")]
     API -- "attempts" --> SB
     MA -- "internships" --> SB
-    MA <--> CH[("Chroma<br/>vector index")]
+    MA <--> CH[("Chroma<br/>stored vectors")]
     MA -. "embeddings" .-> GE["Gemini<br/>embeddings"]
 ```
 
 The app has three parts, and every request from the browser carries the user's Supabase access token, which each service verifies.
 
 1. **Profile.** The React app sends the resume to the **API**, which reads the PDF, asks Gemini for a profile in a fixed JSON schema, and cleans the result. The student saves it to their `profiles` row in Supabase.
-2. **Matching.** At start-up the **matching service** loads every internship from Supabase and embeds it with `gemini-embedding-001` into a persistent Chroma collection. The collection name is a hash of the data, so restarts reuse the vectors and any change to the listings rebuilds them. For a profile, Chroma finds the closest candidates, then each one is scored:
+2. **Matching.** The **matching service** loads every internship from Supabase (paged, so there is no row limit), embeds each one with `gemini-embedding-001` at 768 dimensions, and stores the vectors in Chroma. Every five minutes it syncs again, embedding only listings that are new or edited, so new internships become matchable without a restart. For a profile, it embeds the profile once (repeat profiles come from a cache), then scores **every** listing: semantic similarity is one matrix product over unit vectors held in memory, so no strong fit on skills and location is ever skipped for being far away in meaning. Each listing's score has five parts:
 
    | Part | Weight | How it is measured |
    | --- | --- | --- |
@@ -93,15 +93,28 @@ The app has three parts, and every request from the browser carries the user's S
 
 3. **Interview.** The **API** asks Gemini for two questions. Each recorded answer is uploaded to Cloudinary and saved as an `interview_attempts` row; the API replies at once and then transcribes and scores the answer in the background. The app polls until the score appears. Empty answers score 0 without calling the model, and the total is always computed by the server, never taken from the model.
 
-**Data and security.** Row-level security keeps every table private to its owner; internships are read-only for everyone. Interview attempts can only be written by the API's secret key. All AI keys stay on the servers, and the API rate-limits AI calls per user.
+**Data and security.** Row-level security keeps every table private to its owner; internships are read-only for everyone. Interview attempts can only be written by the API's secret key. All AI keys stay on the servers, and the API rate-limits AI calls per user. Both services verify Supabase's ES256-signed access tokens locally against its published keys, so authentication adds no network round trip.
+
+## Performance
+
+Measured locally against the hosted Supabase project, before and after the optimisation pass:
+
+| | Before | After |
+| --- | --- | --- |
+| `/match`, new profile | 1,219 ms | 466 ms |
+| `/match`, repeated profile | 1,219 ms | 8 ms |
+| Auth overhead per API request | 320 ms | 13 ms |
+| Landing page JavaScript (gzip) | 237 KB | 162 KB |
+
+How: pooled HTTPS connections and a query-embedding cache in the matching service; local JWT verification in both services; cached CORS preflights; 768-dimension embeddings (a quarter of the default size, same ranking); every route but the landing page lazy-loaded; landing animations in CSS instead of an animation library; React Query caches tuned so pages do not refetch data the app itself wrote; memoised internship cards.
 
 ## Tech stack
 
 | Layer | Tools |
 | --- | --- |
-| Frontend | React 18, TypeScript, Vite, Tailwind CSS 4, shadcn/ui, TanStack Query, React Router 7, Motion |
+| Frontend | React 18, TypeScript, Vite, Tailwind CSS 4, shadcn/ui, TanStack Query, React Router 7 |
 | API | Node.js, Express 5, Multer, pdf-parse, express-rate-limit, Cloudinary SDK |
-| Matching | Python 3.11, FastAPI, Chroma, NumPy |
+| Matching | Python 3.11, FastAPI, Chroma, NumPy, PyJWT |
 | AI | Gemini 2.5 Flash-Lite (profiles, questions, scoring), Gemini embeddings, Deepgram Nova-3 (speech to text) |
 | Data and auth | Supabase Postgres with row-level security, Supabase Auth (email and Google) |
 | Quality | Vitest, node:test, pytest, ESLint, GitHub Actions |
@@ -144,7 +157,7 @@ npm run dev
 
 ```bash
 cd backend/matching
-cp .env.example .env    # SUPABASE_URL, SUPABASE_SECRET_KEY, GEMINI_API_KEY, CORS_ORIGINS
+cp .env.example .env    # SUPABASE_URL, SUPABASE_SECRET_KEY, GEMINI_API_KEY, CORS_ORIGINS, optional REFRESH_SECONDS
 python -m venv .venv
 source .venv/bin/activate    # Windows: .venv\Scripts\activate
 pip install -r requirements.txt
@@ -162,10 +175,12 @@ npm run dev
 
 ## Testing
 
+From the repository root:
+
 ```bash
-cd frontend && npm run lint && npm run typecheck && npm test   # Vitest
-cd backend/api && npm test                                       # node:test, API routes run against fakes
-cd backend/matching && pip install -r requirements-dev.txt && pytest
+(cd frontend && npm run lint && npm run typecheck && npm test)    # ESLint, tsc, Vitest
+(cd backend/api && npm test)                                       # node:test; routes run against fakes
+(cd backend/matching && pip install -r requirements-dev.txt && pytest)
 ```
 
 GitHub Actions runs all three on every push and pull request.
@@ -184,7 +199,7 @@ backend/api/src/
   lib/  middleware/       Gemini, Deepgram, Cloudinary clients; auth and errors
 backend/matching/
   main.py                 FastAPI app, auth, /match
-  matching.py             embeddings, Chroma index, the match score
+  matching.py             embeddings, Chroma-backed index with incremental sync, the match score
 supabase/
   migrations/             tables, row-level security, triggers
   seed.sql                25 sample internships
