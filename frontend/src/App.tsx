@@ -1,16 +1,16 @@
 import { lazy, Suspense } from "react";
 import { Navigate, Route, Routes } from "react-router-dom";
-import AppLayout from "./components/AppLayout";
 import { PageLoader } from "./components/PageLoader";
 import ProtectedRoute from "./components/ProtectedRoute";
 import HomePage from "./pages/HomePage";
-import ForgotPasswordPage from "./pages/ForgotPasswordPage";
-import LoginPage from "./pages/LoginPage";
-import NotFoundPage from "./pages/NotFoundPage";
-import ResetPasswordPage from "./pages/ResetPasswordPage";
-import SignupPage from "./pages/SignupPage";
 
-// Signed-in pages load on demand, so the landing page stays small.
+// Only the landing page is in the first download; every other route loads on demand.
+const LoginPage = lazy(() => import("./pages/LoginPage"));
+const SignupPage = lazy(() => import("./pages/SignupPage"));
+const ForgotPasswordPage = lazy(() => import("./pages/ForgotPasswordPage"));
+const ResetPasswordPage = lazy(() => import("./pages/ResetPasswordPage"));
+const NotFoundPage = lazy(() => import("./pages/NotFoundPage"));
+const AppLayout = lazy(() => import("./components/AppLayout"));
 const ProfilePage = lazy(() => import("./pages/ProfilePage"));
 const MatchesPage = lazy(() => import("./pages/MatchesPage"));
 const SavedPage = lazy(() => import("./pages/SavedPage"));

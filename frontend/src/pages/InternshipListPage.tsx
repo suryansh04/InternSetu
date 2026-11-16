@@ -1,10 +1,9 @@
 import { Link } from "react-router-dom";
-import { toast } from "sonner";
 import { EmptyState } from "@/components/EmptyState";
 import { InternshipCard } from "@/components/InternshipCard";
 import { PageLoader } from "@/components/PageLoader";
 import { Button } from "@/components/ui/button";
-import { useInternshipList, useProfile } from "@/hooks/useStudentData";
+import { useProfile, useShortlists } from "@/hooks/useStudentData";
 
 /** Saved and Applied are the same page over different tables. */
 export function InternshipListPage({
@@ -17,8 +16,7 @@ export function InternshipListPage({
   emptyText: string;
 }) {
   const profile = useProfile();
-  const saved = useInternshipList("saved_internships");
-  const applied = useInternshipList("applications");
+  const { saved, applied, toggleSaved, toggleApplied } = useShortlists();
   const current = list === "saved_internships" ? saved : applied;
 
   if (current.isPending) return <PageLoader />;
@@ -40,7 +38,6 @@ export function InternshipListPage({
     );
   }
 
-  const onError = (err: Error) => toast.error(err.message);
   return (
     <div className="mx-auto max-w-4xl space-y-4">
       {current.data.map((internship) => (
@@ -50,8 +47,8 @@ export function InternshipListPage({
           studentSkills={profile.data?.skills}
           isSaved={saved.ids.has(internship.id)}
           isApplied={applied.ids.has(internship.id)}
-          onToggleSaved={() => saved.toggle(internship, onError)}
-          onToggleApplied={() => applied.toggle(internship, onError)}
+          onToggleSaved={toggleSaved}
+          onToggleApplied={toggleApplied}
         />
       ))}
     </div>

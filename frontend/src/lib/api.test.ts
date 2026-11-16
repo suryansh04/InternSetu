@@ -2,11 +2,15 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("./supabase", () => ({
   supabase: {
-    auth: { getSession: async () => ({ data: { session: { access_token: "token-123" } } }) },
+    auth: {
+      getSession: async () => ({ data: { session: { access_token: "token-123" } } }),
+      onAuthStateChange: () => ({ data: { subscription: { unsubscribe() {} } } }),
+    },
   },
 }));
 
 const { api } = await import("./api");
+await Promise.resolve(); // let the initial session load settle
 
 const fetchMock = vi.fn();
 beforeEach(() => vi.stubGlobal("fetch", fetchMock));
@@ -48,6 +52,15 @@ describe("api", () => {
     await expect(
       api.matches({ name: "A", location: "Pune", skills: ["Go"], interests: [], duration_months: 3 }),
     ).rejects.toThrow("Sign in to see matches.");
+  });
+
+  it("turns FastAPI validation errors into one readable line", async () => {
+    fetchMock.mockResolvedValue(
+      reply(422, { detail: [{ loc: ["body", "location"], msg: "String should have at most 120 characters" }] }),
+    );
+    await expect(
+      api.matches({ name: "A", location: "x".repeat(130), skills: ["Go"], interests: [], duration_months: 3 }),
+    ).rejects.toThrow("location: String should have at most 120 characters");
   });
 
   it("explains when the server cannot be reached", async () => {

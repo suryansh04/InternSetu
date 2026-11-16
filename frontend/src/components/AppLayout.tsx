@@ -1,5 +1,6 @@
 import { Link, NavLink, Outlet, useLocation, useNavigate } from "react-router-dom";
 import { Bookmark, LogOut, Mic, Send, Target, UserRound } from "lucide-react";
+import { useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { Logo } from "@/components/Logo";
 import {
@@ -15,6 +16,7 @@ import {
   SidebarTrigger,
 } from "@/components/ui/sidebar";
 import { useAuthContext } from "@/contexts/AuthContext";
+import { useProfile } from "@/hooks/useStudentData";
 
 const navItems = [
   { icon: Target, label: "Top matches", path: "/app" },
@@ -25,6 +27,9 @@ const navItems = [
 
 export default function AppLayout() {
   const { currentUser, logout } = useAuthContext();
+  const profile = useProfile();
+  const name = profile.data?.name || currentUser?.displayName;
+  const queryClient = useQueryClient();
   const navigate = useNavigate();
   const { pathname } = useLocation();
   const current = navItems.find((item) => item.path === pathname) ?? navItems[0];
@@ -32,6 +37,7 @@ export default function AppLayout() {
   const handleLogout = async () => {
     try {
       await logout();
+      queryClient.clear(); // drop this user's cached data before anyone else signs in
       navigate("/");
     } catch (err) {
       toast.error((err as Error).message);
@@ -66,7 +72,7 @@ export default function AppLayout() {
               <SidebarMenuButton asChild>
                 <Link to="/profile">
                   <UserRound />
-                  <span className="truncate">{currentUser?.displayName || "Your profile"}</span>
+                  <span className="truncate">{name || "Your profile"}</span>
                 </Link>
               </SidebarMenuButton>
             </SidebarMenuItem>

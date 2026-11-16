@@ -1,3 +1,4 @@
+import { memo, useMemo } from "react";
 import { Bookmark, BookmarkCheck, Check, Clock, IndianRupee, MapPin } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -25,11 +26,12 @@ interface InternshipCardProps {
   studentSkills?: string[];
   isSaved: boolean;
   isApplied: boolean;
-  onToggleSaved: () => void;
-  onToggleApplied: () => void;
+  onToggleSaved: (internship: Internship) => void;
+  onToggleApplied: (internship: Internship) => void;
 }
 
-export function InternshipCard({
+/** Memoised: toggling one card's Save or Apply re-renders only that card. */
+export const InternshipCard = memo(function InternshipCard({
   internship,
   score,
   parts,
@@ -39,7 +41,7 @@ export function InternshipCard({
   onToggleSaved,
   onToggleApplied,
 }: InternshipCardProps) {
-  const mine = new Set(studentSkills.map((s) => s.toLowerCase()));
+  const mine = useMemo(() => new Set(studentSkills.map((s) => s.toLowerCase())), [studentSkills]);
 
   return (
     <Card>
@@ -115,14 +117,14 @@ export function InternshipCard({
         )}
 
         <div className="flex gap-2">
-          <Button variant="outline" size="sm" onClick={onToggleSaved} aria-pressed={isSaved}>
+          <Button variant="outline" size="sm" onClick={() => onToggleSaved(internship)} aria-pressed={isSaved}>
             {isSaved ? <BookmarkCheck /> : <Bookmark />}
             {isSaved ? "Saved" : "Save"}
           </Button>
           <Button
             size="sm"
             variant={isApplied ? "secondary" : "default"}
-            onClick={onToggleApplied}
+            onClick={() => onToggleApplied(internship)}
             aria-pressed={isApplied}
           >
             {isApplied && <Check />}
@@ -132,4 +134,4 @@ export function InternshipCard({
       </CardContent>
     </Card>
   );
-}
+});

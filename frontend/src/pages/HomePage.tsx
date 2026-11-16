@@ -1,6 +1,5 @@
 import { useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
-import { motion } from "motion/react";
 import { ArrowRight, ChevronDown } from "lucide-react";
 import { BackgroundLines } from "@/components/landing/background-lines";
 import { FeaturesSection } from "@/components/landing/features-section";
@@ -49,21 +48,9 @@ export default function HomePage() {
   return (
     <div className="min-h-screen">
       <BackgroundLines className="flex w-full flex-col items-center justify-center px-4 py-16 md:py-24">
-        <motion.h1
-          className="relative z-20 py-4 text-center text-4xl font-bold tracking-tight md:py-10 md:text-6xl lg:text-7xl"
-          style={{
-            backgroundSize: "200%",
-            backgroundClip: "text",
-            WebkitBackgroundClip: "text",
-            WebkitTextFillColor: "transparent",
-            backgroundImage: "linear-gradient(90deg, #000, #4f46e5, #000)",
-          }}
-          initial={{ backgroundPosition: "200% center" }}
-          animate={{ backgroundPosition: "-200% center" }}
-          transition={{ duration: 8, repeat: Infinity, ease: "linear" }}
-        >
+        <h1 className="landing-title relative z-20 py-4 text-center text-4xl font-bold tracking-tight md:py-10 md:text-6xl lg:text-7xl">
           Internships that fit you
-        </motion.h1>
+        </h1>
         <p className="mx-auto mb-8 max-w-2xl text-center text-base text-muted-foreground md:text-lg">
           Upload your resume and InternSetu ranks internships by how well you fit, shows you why,
           and helps you practise the interview.
@@ -85,14 +72,10 @@ export default function HomePage() {
           href="#features"
           className="absolute bottom-8 left-1/2 z-10 flex -translate-x-1/2 flex-col items-center text-muted-foreground"
         >
-          <motion.span
-            className="flex flex-col items-center"
-            animate={{ y: [0, 10, 0] }}
-            transition={{ repeat: Infinity, duration: 2, ease: "easeInOut" }}
-          >
+          <span className="flex flex-col items-center motion-safe:animate-bounce">
             <span className="mb-2 text-sm">Scroll to explore</span>
             <ChevronDown className="h-6 w-6" />
-          </motion.span>
+          </span>
         </a>
       )}
 

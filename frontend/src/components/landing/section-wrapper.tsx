@@ -1,5 +1,5 @@
-import type { ReactNode } from "react";
-import { motion } from "motion/react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
+import { cn } from "@/lib/utils";
 
 interface SectionWrapperProps {
   children: ReactNode;
@@ -7,17 +7,34 @@ interface SectionWrapperProps {
   className?: string;
 }
 
-/** Fades a section up into view the first time it scrolls on screen. */
-export function SectionWrapper({ children, delay = 0, className = "" }: SectionWrapperProps) {
+/** Fades a section up into view the first time it scrolls on screen (CSS transition). */
+export function SectionWrapper({ children, delay = 0, className }: SectionWrapperProps) {
+  const ref = useRef<HTMLDivElement>(null);
+  const [visible, setVisible] = useState(false);
+
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    const observer = new IntersectionObserver(
+      ([entry]) => {
+        if (entry.isIntersecting) {
+          setVisible(true);
+          observer.disconnect(); // only animate once
+        }
+      },
+      { rootMargin: "0px 0px -100px 0px" },
+    );
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, []);
+
   return (
-    <motion.div
-      initial={{ y: 20, opacity: 0 }}
-      whileInView={{ y: 0, opacity: 1 }}
-      viewport={{ once: true, margin: "-100px" }}
-      transition={{ duration: 0.6, delay, ease: "easeOut" }}
-      className={className}
+    <div
+      ref={ref}
+      className={cn("landing-reveal", visible && "is-visible", className)}
+      style={{ transitionDelay: `${delay}s` }}
     >
       {children}
-    </motion.div>
+    </div>
   );
 }

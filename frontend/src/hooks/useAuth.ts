@@ -1,19 +1,12 @@
-import { useState, useEffect } from "react";
+import { useEffect, useMemo, useState } from "react";
 import type { AuthError, User } from "@supabase/supabase-js";
 import { supabase } from "@/lib/supabase";
 
 export interface AuthUser {
   id: string;
   email: string | null;
+  /** The name given at sign-up (or by Google). The editable name lives on the profile. */
   displayName: string | null;
-  photoURL: string | null;
-  role: string;
-}
-
-interface ProfileRow {
-  display_name: string | null;
-  avatar_url: string | null;
-  role: string;
 }
 
 // Turn Supabase auth errors into messages people can act on.
@@ -31,133 +24,93 @@ const friendlyError = (err: AuthError | Error): Error => {
   return new Error((code && messages[code]) || err.message);
 };
 
-const toAuthUser = (user: User, profile?: ProfileRow | null): AuthUser => ({
+const toAuthUser = (user: User): AuthUser => ({
   id: user.id,
   email: user.email ?? null,
-  displayName:
-    profile?.display_name ??
-    user.user_metadata?.name ??
-    user.user_metadata?.full_name ??
-    null,
-  photoURL: profile?.avatar_url ?? user.user_metadata?.avatar_url ?? null,
-  role: profile?.role ?? "user",
+  displayName: user.user_metadata?.name ?? user.user_metadata?.full_name ?? null,
 });
 
-const loadUser = async (user: User): Promise<AuthUser> => {
-  const { data } = await supabase
-    .from("profiles")
-    .select("display_name, avatar_url, role")
-    .eq("id", user.id)
-    .maybeSingle();
-  return toAuthUser(user, data);
-};
+/** Run an auth call, turning its error into a friendly one. */
+async function run<T>(fn: () => Promise<T>): Promise<T> {
+  try {
+    return await fn();
+  } catch (err) {
+    throw friendlyError(err as AuthError);
+  }
+}
 
-export const useAuth = () => {
-  const [currentUser, setCurrentUser] = useState<AuthUser | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-
-  useEffect(() => {
-    const {
-      data: { subscription },
-    } = supabase.auth.onAuthStateChange((_event, session) => {
-      if (!session?.user) {
-        setCurrentUser(null);
-        setLoading(false);
-        return;
-      }
-      // Set the basic user at once, then add the profile row. Calling Supabase
-      // inside this callback directly can deadlock, so defer it.
-      setCurrentUser(toAuthUser(session.user));
-      setLoading(false);
-      setTimeout(() => {
-        loadUser(session.user).then(setCurrentUser).catch(() => {});
-      }, 0);
-    });
-
-    return () => subscription.unsubscribe();
-  }, []);
-
-  const run = async <T>(fn: () => Promise<T>): Promise<T> => {
-    try {
-      setError(null);
-      return await fn();
-    } catch (err) {
-      const friendly = friendlyError(err as AuthError);
-      setError(friendly.message);
-      throw friendly;
-    }
-  };
-
+// These never change, so they live outside the hook and the context value stays stable.
+const actions = {
   // Returns the user, or null when the project requires email confirmation.
-  const signup = (email: string, password: string, name: string) =>
+  signup: (email: string, password: string, name: string) =>
     run(async () => {
       const { data, error } = await supabase.auth.signUp({
         email,
         password,
-        options: {
-          data: { name },
-          emailRedirectTo: `${window.location.origin}/profile`,
-        },
+        options: { data: { name }, emailRedirectTo: `${window.location.origin}/profile` },
       });
       if (error) throw error;
-      if (!data.session || !data.user) return null;
-      const user = toAuthUser(data.user);
-      setCurrentUser(user);
-      return user;
-    });
+      return data.session && data.user ? toAuthUser(data.user) : null;
+    }),
 
-  const login = (email: string, password: string) =>
+  login: (email: string, password: string) =>
     run(async () => {
-      const { data, error } = await supabase.auth.signInWithPassword({
-        email,
-        password,
-      });
+      const { data, error } = await supabase.auth.signInWithPassword({ email, password });
       if (error) throw error;
-      const user = await loadUser(data.user);
-      setCurrentUser(user);
-      return user;
-    });
+      return toAuthUser(data.user);
+    }),
 
   // Redirects to Google; the user comes back signed in at /app.
-  const signInWithGoogle = () =>
+  signInWithGoogle: () =>
     run(async () => {
       const { error } = await supabase.auth.signInWithOAuth({
         provider: "google",
         options: { redirectTo: `${window.location.origin}/app` },
       });
       if (error) throw error;
-    });
+    }),
 
-  const logout = () =>
+  logout: () =>
     run(async () => {
       const { error } = await supabase.auth.signOut();
       if (error) throw error;
-    });
+    }),
 
-  const resetPassword = (email: string) =>
+  resetPassword: (email: string) =>
     run(async () => {
       const { error } = await supabase.auth.resetPasswordForEmail(email, {
         redirectTo: `${window.location.origin}/reset-password`,
       });
       if (error) throw error;
-    });
+    }),
 
-  const updatePassword = (password: string) =>
+  updatePassword: (password: string) =>
     run(async () => {
       const { error } = await supabase.auth.updateUser({ password });
       if (error) throw error;
-    });
+    }),
+};
 
-  return {
-    currentUser,
-    loading,
-    error,
-    signup,
-    login,
-    signInWithGoogle,
-    logout,
-    resetPassword,
-    updatePassword,
-  };
+export const useAuth = () => {
+  const [currentUser, setCurrentUser] = useState<AuthUser | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange((_event, session) => {
+      const next = session?.user ? toAuthUser(session.user) : null;
+      // Token refreshes fire this hourly with the same user: keep the old object
+      // so nothing that depends on currentUser re-renders.
+      setCurrentUser((prev) =>
+        prev && next && prev.id === next.id && prev.email === next.email && prev.displayName === next.displayName
+          ? prev
+          : next,
+      );
+      setLoading(false);
+    });
+    return () => subscription.unsubscribe();
+  }, []);
+
+  return useMemo(() => ({ currentUser, loading, ...actions }), [currentUser, loading]);
 };

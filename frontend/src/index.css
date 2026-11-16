@@ -129,3 +129,71 @@
     @apply bg-background text-foreground;
   }
 }
+
+/* ---------------------------------------------------------------------------
+   Landing page effects: CSS only, so they cost no JavaScript per frame.
+   --------------------------------------------------------------------------- */
+.landing-title {
+  background-image: linear-gradient(90deg, #000, #4f46e5, #000);
+  background-size: 200%;
+  background-clip: text;
+  -webkit-background-clip: text;
+  color: transparent;
+  animation: landing-title-shine 8s linear infinite;
+}
+
+@keyframes landing-title-shine {
+  from { background-position: 200% center; }
+  to { background-position: -200% center; }
+}
+
+.landing-fade-in {
+  animation: landing-fade-in 0.5s ease-out both;
+}
+
+@keyframes landing-fade-in {
+  from { opacity: 0; }
+}
+
+/* One line travels out from the centre, then rests for the remaining 40% of its cycle. */
+.landing-line {
+  stroke-dasharray: 50 800;
+  stroke-dashoffset: 800;
+  opacity: 0;
+  animation-name: landing-line;
+  animation-timing-function: linear;
+  animation-iteration-count: infinite;
+  animation-fill-mode: both;
+}
+
+@keyframes landing-line {
+  0% { stroke-dashoffset: 800; stroke-dasharray: 50 800; opacity: 0; }
+  15% { opacity: 1; }
+  45% { opacity: 1; }
+  60% { stroke-dashoffset: 0; stroke-dasharray: 20 800; opacity: 0; }
+  100% { stroke-dashoffset: 0; opacity: 0; }
+}
+
+.landing-reveal {
+  opacity: 0;
+  transform: translateY(20px);
+  transition: opacity 0.6s ease-out, transform 0.6s ease-out;
+}
+
+.landing-reveal.is-visible {
+  opacity: 1;
+  transform: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .landing-title,
+  .landing-fade-in,
+  .landing-line {
+    animation: none;
+  }
+  .landing-reveal {
+    opacity: 1;
+    transform: none;
+    transition: none;
+  }
+}

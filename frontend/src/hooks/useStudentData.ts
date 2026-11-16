@@ -1,4 +1,6 @@
+import { useCallback, useEffect, useMemo, useRef } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { toast } from "sonner";
 import { useAuthContext } from "@/contexts/AuthContext";
 import { api } from "@/lib/api";
 import { supabase } from "@/lib/supabase";
@@ -15,6 +17,7 @@ export function useProfile() {
   return useQuery({
     queryKey: ["profile", currentUser?.id],
     enabled: !!currentUser,
+    staleTime: Infinity, // only this app writes it, and writes update the cache directly
     queryFn: async (): Promise<StudentProfile> => {
       const { data, error } = await supabase
         .from("profiles")
@@ -51,16 +54,20 @@ export function useSaveProfile() {
       if (error) throw error;
       return profile;
     },
-    onSuccess: (profile) => {
-      queryClient.setQueryData(["profile", currentUser?.id], profile);
-      queryClient.removeQueries({ queryKey: ["matches"] });
-    },
+    // Matches are keyed by the matching fields, so they refresh by themselves when those change.
+    onSuccess: (profile) => queryClient.setQueryData(["profile", currentUser?.id], profile),
   });
+}
+
+/** Only what affects matching, in a stable order, so a name change or reordered skills reuse the cache. */
+function matchKey(p: StudentProfile) {
+  const sorted = (xs: string[]) => [...xs].map((x) => x.toLowerCase()).sort();
+  return { skills: sorted(p.skills), interests: sorted(p.interests), location: p.location.toLowerCase(), months: p.duration_months };
 }
 
 export function useMatches(profile: StudentProfile | undefined) {
   return useQuery({
-    queryKey: ["matches", profile],
+    queryKey: ["matches", profile && matchKey(profile)],
     enabled: isProfileComplete(profile),
     queryFn: async () => (await api.matches(profile!)).matches,
     staleTime: 10 * 60 * 1000,
@@ -80,6 +87,7 @@ export function useInternshipList(table: ListTable) {
   const query = useQuery({
     queryKey,
     enabled: !!currentUser,
+    staleTime: 5 * 60 * 1000,
     queryFn: async (): Promise<Internship[]> => {
       const { data, error } = await supabase
         .from(table)
@@ -107,17 +115,49 @@ export function useInternshipList(table: ListTable) {
       queryClient.setQueryData(queryKey, add ? [internship, ...without] : without);
       return { previous };
     },
+    // On success the optimistic list is already right; only resync after a failure.
     onError: (_err, _vars, context) => {
       if (context) queryClient.setQueryData(queryKey, context.previous);
+      queryClient.invalidateQueries({ queryKey });
     },
-    onSettled: () => queryClient.invalidateQueries({ queryKey }),
   });
 
-  const ids = new Set(query.data?.map((i) => i.id));
-  const toggleItem = (internship: Internship, onError: (err: Error) => void) =>
-    toggle.mutate({ internship, add: !ids.has(internship.id) }, { onError });
+  const ids = useMemo(() => new Set(query.data?.map((i) => i.id)), [query.data]);
+  // Read ids through a ref so the handler never changes identity, and memoised
+  // cards are not all re-rendered when one of them is toggled.
+  const idsRef = useRef(ids);
+  useEffect(() => {
+    idsRef.current = ids;
+  }, [ids]);
+  const { mutate } = toggle;
+  const toggleItem = useCallback(
+    (internship: Internship, onError: (err: Error) => void) =>
+      mutate({ internship, add: !idsRef.current.has(internship.id) }, { onError }),
+    [mutate],
+  );
   return { ...query, ids, toggle: toggleItem };
 }
+
+const showError = (err: Error) => toast.error(err.message);
+
+/** Saved and applied lists plus stable toggle handlers for internship cards. */
+export function useShortlists() {
+  const saved = useInternshipList("saved_internships");
+  const applied = useInternshipList("applications");
+  const { toggle: toggleSavedItem } = saved;
+  const { toggle: toggleAppliedItem } = applied;
+  const toggleSaved = useCallback((i: Internship) => toggleSavedItem(i, showError), [toggleSavedItem]);
+  const toggleApplied = useCallback((i: Internship) => toggleAppliedItem(i, showError), [toggleAppliedItem]);
+  return { saved, applied, toggleSaved, toggleApplied };
+}
+
+const ATTEMPT_COLUMNS =
+  "id, session_id, role, question, transcript, scores, total_score, feedback, status, flagged_reason, created_at";
+const STALE_AFTER_MS = 15 * 60 * 1000;
+
+/** An attempt still 'processing' after 15 minutes was lost (e.g. a server restart): show it as failed. */
+export const isStuck = (a: InterviewAttempt, now = Date.now()) =>
+  a.status === "processing" && now - new Date(a.created_at).getTime() > STALE_AFTER_MS;
 
 export function useInterviewAttempts() {
   const { currentUser } = useAuthContext();
@@ -127,13 +167,14 @@ export function useInterviewAttempts() {
     queryFn: async (): Promise<InterviewAttempt[]> => {
       const { data, error } = await supabase
         .from("interview_attempts")
-        .select("*")
+        .select(ATTEMPT_COLUMNS)
         .order("created_at", { ascending: false })
         .limit(50);
       if (error) throw error;
-      return data;
+      return data.map((a) => (isStuck(a) ? { ...a, status: "failed" as const } : a));
     },
-    // Keep polling while answers are still being scored.
+    staleTime: 30 * 1000,
+    // Poll while answers are being scored (stuck ones are already shown as failed).
     refetchInterval: (query) =>
       query.state.data?.some((a) => a.status === "processing") ? 3000 : false,
   });

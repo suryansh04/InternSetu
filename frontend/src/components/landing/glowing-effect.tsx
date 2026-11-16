@@ -1,6 +1,5 @@
-import { memo, useCallback, useEffect, useRef } from "react";
+import { memo, useCallback, useEffect, useRef, type CSSProperties } from "react";
 import { cn } from "@/lib/utils";
-import { animate } from "motion/react";
 
 interface GlowingEffectProps {
   blur?: number;
@@ -30,6 +29,7 @@ const GlowingEffect = memo(
     const containerRef = useRef<HTMLDivElement>(null);
     const lastPosition = useRef({ x: 0, y: 0 });
     const animationFrameRef = useRef<number>(0);
+    const tweenRef = useRef<number>(0);
 
     const handleMove = useCallback(
       (e?: MouseEvent | { x: number; y: number }) => {
@@ -83,20 +83,24 @@ const GlowingEffect = memo(
           const angleDiff = ((targetAngle - currentAngle + 180) % 360) - 180;
           const newAngle = currentAngle + angleDiff;
 
-          animate(currentAngle, newAngle, {
-            duration: movementDuration,
-            ease: [0.16, 1, 0.3, 1],
-            onUpdate: (value) => {
-              element.style.setProperty("--start", String(value));
-            },
-          });
+          // Ease the glow towards the pointer. Cancel the previous tween first,
+          // so fast pointer moves never leave several animations fighting.
+          cancelAnimationFrame(tweenRef.current);
+          const startedAt = performance.now();
+          const step = (now: number) => {
+            const t = Math.min(1, (now - startedAt) / (movementDuration * 1000));
+            const eased = 1 - Math.pow(2, -10 * t); // ease-out-expo
+            element.style.setProperty("--start", String(currentAngle + (newAngle - currentAngle) * eased));
+            if (t < 1) tweenRef.current = requestAnimationFrame(step);
+          };
+          tweenRef.current = requestAnimationFrame(step);
         });
       },
       [inactiveZone, proximity, movementDuration]
     );
 
     useEffect(() => {
-      if (disabled) return;
+      if (disabled || window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
 
       const handleScroll = () => handleMove();
       const handlePointerMove = (e: PointerEvent) => handleMove(e);
@@ -107,9 +111,8 @@ const GlowingEffect = memo(
       });
 
       return () => {
-        if (animationFrameRef.current) {
-          cancelAnimationFrame(animationFrameRef.current);
-        }
+        cancelAnimationFrame(animationFrameRef.current);
+        cancelAnimationFrame(tweenRef.current);
         window.removeEventListener("scroll", handleScroll);
         document.body.removeEventListener("pointermove", handlePointerMove);
       };
@@ -154,7 +157,7 @@ const GlowingEffect = memo(
                   #4c7894 calc(75% / var(--repeating-conic-gradient-times)),
                   #dd7bbb calc(100% / var(--repeating-conic-gradient-times))
                 )`,
-            } as React.CSSProperties
+            } as CSSProperties
           }
           className={cn(
             "pointer-events-none absolute inset-0 rounded-[inherit] opacity-100 transition-opacity",

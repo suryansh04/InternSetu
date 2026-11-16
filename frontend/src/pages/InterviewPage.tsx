@@ -50,6 +50,9 @@ export default function InterviewPage() {
   const recorderRef = useRef<MediaRecorder | null>(null);
   const chunksRef = useRef<Blob[]>([]);
   const discardRef = useRef(false); // set when an attempt is flagged, so nothing uploads
+  // Uploads run in the background so the next question starts at once;
+  // only the end of the interview waits for them.
+  const uploadsRef = useRef<Promise<unknown>[]>([]);
 
   // ----- camera -----
   const startCamera = useCallback(async () => {
@@ -102,6 +105,7 @@ export default function InterviewPage() {
     const media = stream ?? (await startCamera());
     if (!media) return;
     discardRef.current = false;
+    uploadsRef.current = [];
     setIndex(0);
     setSecondsLeft(PREP_SECONDS);
     setPhase("prep");
@@ -136,24 +140,27 @@ export default function InterviewPage() {
     if (!recorder || recorder.state === "inactive") return;
     recorder.onstop = async () => {
       if (discardRef.current) return;
-      setPhase("saving");
       const video = new Blob(chunksRef.current, { type: recorder.mimeType || "video/webm" });
-      try {
-        await api.submitAnswer({ sessionId, role, question: questions[index], video });
-        await attempts.refetch();
-      } catch (err) {
-        toast.error(`Your answer could not be saved: ${(err as Error).message}`);
-      }
+      uploadsRef.current.push(
+        api
+          .submitAnswer({ sessionId, role, question: questions[index], video })
+          .then(() => refetchAttempts())
+          .catch((err) => toast.error(`Your answer could not be saved: ${(err as Error).message}`)),
+      );
       if (index + 1 < questions.length) {
         setIndex(index + 1);
         setSecondsLeft(PREP_SECONDS);
         setPhase("prep");
-      } else {
-        finish("done");
+        return;
       }
+      setPhase("saving");
+      await Promise.allSettled(uploadsRef.current);
+      uploadsRef.current = [];
+      // The user may have left the tab while we waited: keep the 'flagged' state.
+      if (!discardRef.current) finish("done");
     };
     recorder.stop();
-  }, [attempts, finish, index, questions, role, sessionId]);
+  }, [finish, index, questions, refetchAttempts, role, sessionId]);
 
   // One timer drives both countdowns.
   useEffect(() => {
@@ -336,7 +343,7 @@ function Countdown({ phase, seconds }: { phase: Phase; seconds: number }) {
   if (phase === "saving") {
     return (
       <div className="flex items-center gap-2 text-muted-foreground">
-        <Loader2 className="animate-spin" /> Saving your answer…
+        <Loader2 className="animate-spin" /> Saving your answers…
       </div>
     );
   }

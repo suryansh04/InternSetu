@@ -4,13 +4,34 @@ import type { Match, StudentProfile } from "./types";
 const API_URL = import.meta.env.VITE_API_URL ?? "http://localhost:4000";
 const MATCHING_URL = import.meta.env.VITE_MATCHING_URL ?? "http://localhost:8000";
 
+// The current access token, kept in sync with Supabase. Reading it is synchronous,
+// which matters for requests sent while the page unloads (an await there never resumes).
+let accessToken: string | null = null;
+supabase.auth.getSession().then(({ data }) => {
+  accessToken ??= data.session?.access_token ?? null;
+});
+supabase.auth.onAuthStateChange((_event, session) => {
+  accessToken = session?.access_token ?? null;
+});
+
+/** FastAPI validation errors arrive as a list; turn them into one readable line. */
+function errorMessage(body: unknown, status: number): string {
+  const b = body as { error?: unknown; detail?: unknown } | null;
+  if (typeof b?.error === "string") return b.error;
+  if (typeof b?.detail === "string") return b.detail;
+  if (Array.isArray(b?.detail)) {
+    return b.detail
+      .map((d: { loc?: unknown[]; msg?: string }) => `${d.loc?.at(-1) ?? "input"}: ${d.msg ?? "invalid"}`)
+      .join("; ");
+  }
+  return `Request failed (${status}).`;
+}
+
 /** Fetch from one of our services with the user's access token, and turn
  * error responses into Errors whose message is safe to show. */
-async function request<T>(url: string, init: RequestInit = {}): Promise<T> {
-  const { data } = await supabase.auth.getSession();
-  const token = data.session?.access_token;
+async function request<T>(url: string, init: RequestInit = {}, retried = false): Promise<T> {
   const headers = new Headers(init.headers);
-  if (token) headers.set("Authorization", `Bearer ${token}`);
+  if (accessToken) headers.set("Authorization", `Bearer ${accessToken}`);
   if (typeof init.body === "string") headers.set("Content-Type", "application/json");
 
   let res: Response;
@@ -19,10 +40,20 @@ async function request<T>(url: string, init: RequestInit = {}): Promise<T> {
   } catch {
     throw new Error("Can't reach the server. Check that the backend is running.");
   }
-  const body = await res.json().catch(() => null);
-  if (!res.ok) {
-    throw new Error(body?.error ?? body?.detail ?? `Request failed (${res.status}).`);
+
+  // The cached token can be stale, e.g. right after the computer wakes from sleep.
+  // getSession() refreshes it if needed; retry once with the fresh one.
+  if (res.status === 401 && !retried) {
+    const { data } = await supabase.auth.getSession();
+    const fresh = data.session?.access_token ?? null;
+    if (fresh && fresh !== accessToken) {
+      accessToken = fresh;
+      return request<T>(url, init, true);
+    }
   }
+
+  const body = await res.json().catch(() => null);
+  if (!res.ok) throw new Error(errorMessage(body, res.status));
   return body as T;
 }
 
