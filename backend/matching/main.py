@@ -2,17 +2,18 @@
 
 from __future__ import annotations
 
+import asyncio
 import logging
 import os
-import time
-from contextlib import asynccontextmanager
+from contextlib import asynccontextmanager, suppress
 from pathlib import Path
 
-import requests
+import jwt
 from dotenv import load_dotenv
 from fastapi import Depends, FastAPI, Header, HTTPException
 from fastapi.concurrency import run_in_threadpool
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.middleware.gzip import GZipMiddleware
 from pydantic import BaseModel, Field
 
 from matching import GeminiEmbedder, MatchIndex, fetch_internships
@@ -32,8 +33,9 @@ def require_env(name: str) -> str:
 SUPABASE_URL = require_env("SUPABASE_URL").rstrip("/")
 SUPABASE_SECRET_KEY = require_env("SUPABASE_SECRET_KEY")
 GEMINI_API_KEY = require_env("GEMINI_API_KEY")
-CORS_ORIGINS = os.getenv("CORS_ORIGINS", "http://localhost:5173").split(",")
+CORS_ORIGINS = [o.strip() for o in os.getenv("CORS_ORIGINS", "http://localhost:5173").split(",")]
 PERSIST_DIR = os.getenv("CHROMA_DIR", str(Path(__file__).with_name("chroma_data")))
+REFRESH_SECONDS = int(os.getenv("REFRESH_SECONDS", "300"))
 
 
 class Profile(BaseModel):
@@ -43,62 +45,75 @@ class Profile(BaseModel):
     duration_months: int | None = Field(default=None, ge=1, le=24)
 
 
-class AppState:
-    index: MatchIndex | None = None
+index = MatchIndex(GeminiEmbedder(GEMINI_API_KEY), PERSIST_DIR)
 
 
-state = AppState()
+def refresh_index() -> None:
+    stats = index.refresh(fetch_internships(SUPABASE_URL, SUPABASE_SECRET_KEY))
+    log.info("Index synced: %(total)d internships, %(embedded)d embedded, %(removed)d removed", stats)
+
+
+async def keep_index_fresh() -> None:
+    """New or edited listings become matchable within REFRESH_SECONDS, without a restart."""
+    while True:
+        await asyncio.sleep(REFRESH_SECONDS)
+        try:
+            await run_in_threadpool(refresh_index)
+        except Exception:  # keep serving the last good snapshot
+            log.exception("Index refresh failed")
 
 
 @asynccontextmanager
 async def lifespan(_: FastAPI):
-    def build() -> MatchIndex:
-        internships = fetch_internships(SUPABASE_URL, SUPABASE_SECRET_KEY)
-        log.info("Loaded %d internships from Supabase", len(internships))
-        return MatchIndex.build(internships, GeminiEmbedder(GEMINI_API_KEY), PERSIST_DIR)
-
-    state.index = await run_in_threadpool(build)
-    log.info("Match index ready")
+    await run_in_threadpool(refresh_index)
+    task = asyncio.create_task(keep_index_fresh())
     yield
+    task.cancel()
+    with suppress(asyncio.CancelledError):
+        await task
 
 
 app = FastAPI(title="InternSetu matching API", lifespan=lifespan)
+app.add_middleware(GZipMiddleware, minimum_size=1024)
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[o.strip() for o in CORS_ORIGINS],
+    allow_origins=CORS_ORIGINS,
     allow_methods=["GET", "POST"],
     allow_headers=["Authorization", "Content-Type"],
+    max_age=3600,  # let browsers cache the preflight instead of sending it before every match
 )
 
 
 # ---------------------------------------------------------------------------
-# Auth: only signed-in users may run matches (each one costs an embedding call)
+# Auth: Supabase signs access tokens with an asymmetric key, so they are
+# verified locally against its published keys: no network call per request.
 # ---------------------------------------------------------------------------
-_token_cache: dict[str, float] = {}
-TOKEN_CACHE_SECONDS = 300
+_jwks = jwt.PyJWKClient(f"{SUPABASE_URL}/auth/v1/.well-known/jwks.json", cache_keys=True, lifespan=3600)
 
 
-def _verify_with_supabase(token: str) -> bool:
-    resp = requests.get(
-        f"{SUPABASE_URL}/auth/v1/user",
-        headers={"apikey": SUPABASE_SECRET_KEY, "Authorization": f"Bearer {token}"},
-        timeout=10,
+def _verify(token: str) -> dict:
+    key = _jwks.get_signing_key_from_jwt(token)
+    return jwt.decode(
+        token,
+        key.key,
+        algorithms=["ES256", "RS256"],
+        audience="authenticated",
+        issuer=f"{SUPABASE_URL}/auth/v1",
     )
-    return resp.status_code == 200
 
 
-async def require_user(authorization: str = Header(default="")) -> None:
+async def require_user(authorization: str = Header(default="")) -> str:
     token = authorization.removeprefix("Bearer ").strip()
     if not token:
         raise HTTPException(401, "Sign in to see matches.")
-    now = time.monotonic()
-    if _token_cache.get(token, 0) > now:
-        return
-    if not await run_in_threadpool(_verify_with_supabase, token):
+    try:
+        # Usually instant (cached key); only the first call fetches the key set.
+        claims = await run_in_threadpool(_verify, token)
+    except jwt.ExpiredSignatureError:
         raise HTTPException(401, "Your session has expired. Please sign in again.")
-    if len(_token_cache) > 10_000:
-        _token_cache.clear()
-    _token_cache[token] = now + TOKEN_CACHE_SECONDS
+    except (jwt.PyJWTError, jwt.PyJWKClientError):
+        raise HTTPException(401, "Please sign in again.")
+    return claims["sub"]
 
 
 # ---------------------------------------------------------------------------
@@ -106,13 +121,10 @@ async def require_user(authorization: str = Header(default="")) -> None:
 # ---------------------------------------------------------------------------
 @app.get("/health")
 def health() -> dict:
-    count = len(state.index.internships) if state.index else 0
-    return {"status": "ok" if state.index else "starting", "internships": count}
+    return {"status": "ok", "internships": len(index.snapshot)}
 
 
 @app.post("/match", dependencies=[Depends(require_user)])
 async def match(profile: Profile) -> dict:
-    if state.index is None:
-        raise HTTPException(503, "The match index is still loading. Try again shortly.")
-    matches = await run_in_threadpool(state.index.match, profile.model_dump(), 10)
+    matches = await run_in_threadpool(index.match, profile.model_dump(), 10)
     return {"matches": matches, "count": len(matches)}

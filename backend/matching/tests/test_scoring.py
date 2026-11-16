@@ -28,7 +28,7 @@ def test_weights_sum_to_one():
         (["Python"], ["Python", "SQL"], 0.5),
         (["Python", "Go", "Rust", "C"], ["Python"], 1.0),  # extra skills are not penalised
         ([], ["Python"], 0.0),
-        (["Python"], [], 0.0),
+        (["Python"], [], 1.0),  # a listing that asks for nothing is fully covered
         ([" python "], ["Python"], 1.0),  # whitespace is ignored
     ],
 )
