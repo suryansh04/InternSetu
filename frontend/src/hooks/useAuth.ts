@@ -23,7 +23,7 @@ const friendlyError = (err: AuthError | Error): Error => {
     invalid_credentials: "Invalid email or password. Please try again.",
     email_not_confirmed: "Please confirm your email first. Check your inbox.",
     user_already_exists: "An account with this email already exists. Sign in instead.",
-    weak_password: "Please choose a stronger password (at least 6 characters).",
+    weak_password: "Please choose a stronger password (at least 8 characters).",
     over_request_rate_limit: "Too many attempts. Please wait a minute and try again.",
     over_email_send_rate_limit: "Too many emails sent. Please wait a few minutes and try again.",
     validation_failed: "Google sign-in is not set up for this project yet.",
@@ -97,7 +97,7 @@ export const useAuth = () => {
         password,
         options: {
           data: { name },
-          emailRedirectTo: `${window.location.origin}/form`,
+          emailRedirectTo: `${window.location.origin}/profile`,
         },
       });
       if (error) throw error;
@@ -119,12 +119,12 @@ export const useAuth = () => {
       return user;
     });
 
-  // Redirects to Google; the user comes back signed in at /form.
+  // Redirects to Google; the user comes back signed in at /app.
   const signInWithGoogle = () =>
     run(async () => {
       const { error } = await supabase.auth.signInWithOAuth({
         provider: "google",
-        options: { redirectTo: `${window.location.origin}/form` },
+        options: { redirectTo: `${window.location.origin}/app` },
       });
       if (error) throw error;
     });
@@ -138,8 +138,14 @@ export const useAuth = () => {
   const resetPassword = (email: string) =>
     run(async () => {
       const { error } = await supabase.auth.resetPasswordForEmail(email, {
-        redirectTo: `${window.location.origin}/login`,
+        redirectTo: `${window.location.origin}/reset-password`,
       });
+      if (error) throw error;
+    });
+
+  const updatePassword = (password: string) =>
+    run(async () => {
+      const { error } = await supabase.auth.updateUser({ password });
       if (error) throw error;
     });
 
@@ -152,5 +158,6 @@ export const useAuth = () => {
     signInWithGoogle,
     logout,
     resetPassword,
+    updatePassword,
   };
 };
