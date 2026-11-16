@@ -14,7 +14,8 @@ export function createApp({ corsOrigins, supabase, resumeService, interviewServi
   const app = express();
   app.disable("x-powered-by");
   app.set("trust proxy", 1);
-  app.use(cors({ origin: corsOrigins }));
+  // maxAge lets browsers cache the preflight instead of sending one before every call.
+  app.use(cors({ origin: corsOrigins, maxAge: 3600 }));
   app.use(express.json({ limit: "100kb" }));
 
   app.get("/health", (_req, res) => res.json({ status: "ok" }));

@@ -9,8 +9,8 @@ const TOKEN = "valid-token";
 // Fakes for everything outside the process.
 const supabase = {
   auth: {
-    getUser: async (token) =>
-      token === TOKEN ? { data: { user: USER }, error: null } : { data: null, error: new Error("bad") },
+    getClaims: async (token) =>
+      token === TOKEN ? { data: { claims: { sub: USER.id } }, error: null } : { data: null, error: new Error("bad") },
   },
 };
 const calls = [];

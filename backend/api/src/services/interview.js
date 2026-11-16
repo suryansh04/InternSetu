@@ -82,25 +82,40 @@ export function createInterviewService({ gemini, deepgram, videos, supabase }) {
 
     /** Transcribe and score an attempt. Runs after the response is sent. */
     async scoreAttempt({ id, question, videoUrl }) {
+      const update = async (fields) => {
+        // supabase-js reports failures in `error` instead of throwing.
+        const { error } = await supabase.from("interview_attempts").update(fields).eq("id", id);
+        if (error) throw error;
+      };
       try {
         const transcript = (await deepgram.transcribeUrl(videoUrl)).trim();
         const result = transcript
           ? normalizeScores(await gemini.generateJson(scorePrompt(question, transcript), scoreSchema))
           : EMPTY_ANSWER;
-        await supabase
-          .from("interview_attempts")
-          .update({
-            transcript,
-            scores: result.scores,
-            total_score: result.total,
-            feedback: result.feedback,
-            status: "scored",
-          })
-          .eq("id", id);
+        await update({
+          transcript,
+          scores: result.scores,
+          total_score: result.total,
+          feedback: result.feedback,
+          status: "scored",
+        });
       } catch (err) {
         console.error("Scoring failed for attempt", id, err);
-        await supabase.from("interview_attempts").update({ status: "failed" }).eq("id", id);
+        await update({ status: "failed" }).catch((e) => console.error("Could not mark attempt failed", id, e));
       }
+    },
+
+    /** Scoring runs in memory, so a restart orphans in-flight attempts. Fail them. */
+    async failStaleAttempts(olderThanMinutes = 15) {
+      const cutoff = new Date(Date.now() - olderThanMinutes * 60_000).toISOString();
+      const { data, error } = await supabase
+        .from("interview_attempts")
+        .update({ status: "failed" })
+        .eq("status", "processing")
+        .lt("created_at", cutoff)
+        .select("id");
+      if (error) throw error;
+      return data.length;
     },
 
     async flagSession({ userId, sessionId, role, question, reason }) {
