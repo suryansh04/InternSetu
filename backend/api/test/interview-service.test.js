@@ -1,70 +1,169 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { createInterviewService } from "../src/services/interview.js";
+import { CRITERIA } from "../src/prompts/interview.js";
+import {
+  EMPTY_ANSWER,
+  createInterviewService,
+  normalizeScores,
+} from "../src/services/interview.js";
 
-/** A tiny stand-in for the supabase-js query builder that records updates. */
-function fakeSupabase({ failUpdates = 0 } = {}) {
-  const updates = [];
-  let failuresLeft = failUpdates;
-  return {
-    updates,
-    from: () => ({
-      update: (fields) => ({
-        eq: async () => {
-          updates.push(fields);
-          if (failuresLeft > 0) {
-            failuresLeft--;
-            return { error: new Error("write failed") };
-          }
-          return { error: null };
-        },
-      }),
-    }),
+/** An in-memory AttemptStore that records what happened to each attempt. */
+function fakeAttempts({ failScoredWrite = false } = {}) {
+  /** @type {string[]} */
+  const events = [];
+  /** @type {import("../src/types.js").AttemptStore} */
+  const store = {
+    create: async () => "a1",
+    markScored: async (id, _transcript, result) => {
+      if (failScoredWrite) throw new Error("write failed");
+      events.push(`scored ${id} ${result.total}`);
+    },
+    markFailed: async (id) => {
+      events.push(`failed ${id}`);
+    },
+    recordFlag: async (attempt) => {
+      events.push(`flag ${attempt.reason}`);
+    },
+    failStale: async () => 3,
   };
+  return { store, events };
 }
 
+/** @type {import("../src/types.js").Gemini} */
 const gemini = {
-  generateJson: async () => ({ fluency: 8, correctness: 9, grammar: 8, confidence: 7, content: 9, feedback: "Good." }),
+  generateJson: async () => ({
+    fluency: 8,
+    correctness: 9,
+    grammar: 8,
+    confidence: 7,
+    content: 9,
+    feedback: "Good.",
+  }),
 };
+/** @type {import("../src/types.js").VideoStore} */
 const videos = { upload: async () => "https://video" };
+/** @type {import("../src/types.js").Deepgram} */
+const deepgram = { transcribeUrl: async () => "My answer." };
 
-const service = (overrides) =>
-  createInterviewService({ gemini, videos, deepgram: { transcribeUrl: async () => "My answer." }, ...overrides });
+const ATTEMPT = { id: "a1", question: "Q?", videoUrl: "u" };
 
-describe("scoreAttempt", () => {
-  it("stores the transcript and the server-computed total", async () => {
-    const supabase = fakeSupabase();
-    await service({ supabase }).scoreAttempt({ id: "a1", question: "Q?", videoUrl: "u" });
-    assert.equal(supabase.updates.length, 1);
-    assert.equal(supabase.updates[0].status, "scored");
-    assert.equal(supabase.updates[0].total_score, 41);
-    assert.equal(supabase.updates[0].transcript, "My answer.");
+describe("normalizeScores", () => {
+  it("clamps every criterion to 0-10 and recomputes the total", () => {
+    const r = normalizeScores({
+      fluency: 12,
+      correctness: -3,
+      grammar: 7.6,
+      confidence: "5",
+      content: 9,
+      total: 50, // ignored: the model's arithmetic is never trusted
+      feedback: " Good. ",
+    });
+    assert.deepEqual(r.scores, {
+      fluency: 10,
+      correctness: 0,
+      grammar: 8,
+      confidence: 5,
+      content: 9,
+    });
+    assert.equal(r.total, 32);
+    assert.equal(r.feedback, "Good.");
+  });
+
+  it("treats missing criteria and a non-object answer as 0", () => {
+    assert.equal(normalizeScores({}).total, 0);
+    assert.equal(normalizeScores(null).total, 0);
+    assert.deepEqual(Object.keys(normalizeScores({}).scores), CRITERIA);
+  });
+});
+
+describe("interview service", () => {
+  it("keeps exactly two cleaned questions", async () => {
+    const service = createInterviewService({
+      gemini: { generateJson: async () => ({ questions: [" One? ", "", "Two?", "Three?"] }) },
+      deepgram,
+      videos,
+      attempts: fakeAttempts().store,
+    });
+    assert.deepEqual(await service.generateQuestions("x"), ["One?", "Two?"]);
+  });
+
+  it("fails loudly when the model returns too few questions", async () => {
+    const service = createInterviewService({
+      gemini: { generateJson: async () => ({ questions: ["Only one?"] }) },
+      deepgram,
+      videos,
+      attempts: fakeAttempts().store,
+    });
+    await assert.rejects(service.generateQuestions("x"));
+  });
+
+  it("stores the score computed by the server", async () => {
+    const { store, events } = fakeAttempts();
+    await createInterviewService({ gemini, deepgram, videos, attempts: store }).scoreAnswer(
+      ATTEMPT,
+    );
+    assert.deepEqual(events, ["scored a1 41"]);
   });
 
   it("scores silence as 0 without calling the model", async () => {
-    const supabase = fakeSupabase();
+    const { store, events } = fakeAttempts();
     let modelCalls = 0;
-    await service({
-      supabase,
+    await createInterviewService({
+      gemini: {
+        generateJson: async () => {
+          modelCalls++;
+          return {};
+        },
+      },
       deepgram: { transcribeUrl: async () => "  " },
-      gemini: { generateJson: async () => (modelCalls++, {}) },
-    }).scoreAttempt({ id: "a1", question: "Q?", videoUrl: "u" });
+      videos,
+      attempts: store,
+    }).scoreAnswer(ATTEMPT);
     assert.equal(modelCalls, 0);
-    assert.equal(supabase.updates[0].total_score, 0);
+    assert.deepEqual(events, [`scored a1 ${EMPTY_ANSWER.total}`]);
   });
 
   it("marks the attempt failed when transcription fails", async () => {
-    const supabase = fakeSupabase();
-    await service({
-      supabase,
+    const { store, events } = fakeAttempts();
+    await createInterviewService({
+      gemini,
       deepgram: { transcribeUrl: async () => Promise.reject(new Error("deepgram down")) },
-    }).scoreAttempt({ id: "a1", question: "Q?", videoUrl: "u" });
-    assert.deepEqual(supabase.updates, [{ status: "failed" }]);
+      videos,
+      attempts: store,
+    }).scoreAnswer(ATTEMPT);
+    assert.deepEqual(events, ["failed a1"]);
   });
 
   it("marks the attempt failed when saving the score fails, instead of leaving it processing", async () => {
-    const supabase = fakeSupabase({ failUpdates: 1 });
-    await service({ supabase }).scoreAttempt({ id: "a1", question: "Q?", videoUrl: "u" });
-    assert.equal(supabase.updates.at(-1).status, "failed");
+    const { store, events } = fakeAttempts({ failScoredWrite: true });
+    await createInterviewService({ gemini, deepgram, videos, attempts: store }).scoreAnswer(
+      ATTEMPT,
+    );
+    assert.deepEqual(events, ["failed a1"]);
+  });
+
+  it("uploads the video into the user's folder before creating the attempt", async () => {
+    /** @type {string[]} */
+    const folders = [];
+    const service = createInterviewService({
+      gemini,
+      deepgram,
+      videos: {
+        upload: async (_video, { folder }) => {
+          folders.push(folder);
+          return "https://video";
+        },
+      },
+      attempts: fakeAttempts().store,
+    });
+    const result = await service.submitAnswer({
+      userId: "u1",
+      sessionId: "s1",
+      role: "r",
+      question: "q",
+      video: Buffer.alloc(1),
+    });
+    assert.deepEqual(result, { id: "a1", videoUrl: "https://video" });
+    assert.deepEqual(folders, ["interviews/u1"]);
   });
 });
