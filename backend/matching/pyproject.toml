@@ -1,0 +1,36 @@
+[project]
+name = "internsetu-matching"
+version = "1.0.0"
+requires-python = ">=3.11"
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+
+[tool.ruff.lint]
+select = [
+  "E", "W", "F",   # pycodestyle, pyflakes
+  "I",             # import order
+  "B",             # bugbear
+  "UP",            # modern syntax
+  "SIM", "RET",    # simpler code
+  "C4", "PTH",     # comprehensions, pathlib
+  "N",             # naming
+  "S",             # security
+  "PT",            # pytest style
+  "RUF",
+  "ANN",           # type annotations
+]
+ignore = ["ANN401"]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/*" = ["S101", "S105", "ANN"]  # asserts, fake tokens and untyped fixtures are fine in tests
+
+[tool.mypy]
+strict = true
+ignore_missing_imports = true
+files = ["*.py"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]
