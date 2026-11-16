@@ -3,14 +3,14 @@ import { getAuth, GoogleAuthProvider, updateProfile } from "firebase/auth";
 import { getFirestore } from "firebase/firestore";
 import { getStorage, ref as storageRef } from "firebase/storage";
 
-// Your web app's Firebase configuration
+// Firebase web config, read from frontend/.env (see .env.example)
 const firebaseConfig = {
-  apiKey: "***REMOVED***",
-  authDomain: "internsetu-9f79b.firebaseapp.com",
-  projectId: "internsetu-9f79b",
-  storageBucket: "internsetu-9f79b.firebasestorage.app",
-  messagingSenderId: "554517363427",
-  appId: "1:554517363427:web:cef96f32f326a326c363d6",
+  apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
+  authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN,
+  projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID,
+  storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET,
+  messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID,
+  appId: import.meta.env.VITE_FIREBASE_APP_ID,
 };
 
 // Initialize Firebase

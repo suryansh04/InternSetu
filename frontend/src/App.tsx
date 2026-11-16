@@ -19,21 +19,13 @@ const App = () => {
         <Route path="/form" element={<FormComponent />} />
         <Route path="/login" element={<Login />} />
         <Route path="/signup" element={<Signup />} />
-        <Route
-          path="/vapi-widget"
-          element={
-            <VapiWidget
-              apiKey="***REMOVED***"
-              assistantId="***REMOVED***"
-            />
-          }
-        />
+        <Route path="/interview-prep" element={<InterviewPrep />} />
         {/* Dashboard routes (with persistent sidebar) */}
         <Route path="/main" element={<Layout />}>
           <Route index element={<MainScreen />} />
           {/* <Route index element={<MainScreen />} />
           <Route path="matches" element={<MainScreen />} /> */}
-          <Route path="interview-prep" element={<InterviewPrep />} />
+
           {/* <Route path="saved" element={<Saved />} />
           <Route path="applied" element={<Applied />} />
           <Route path="profile" element={<Profile />} />

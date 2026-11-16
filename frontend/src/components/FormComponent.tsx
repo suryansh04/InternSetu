@@ -13,6 +13,7 @@ import { Input } from "@/shadcn/ui/input";
 import { Label } from "@/shadcn/ui/label";
 import { toast } from "sonner";
 import { X, Plus, Upload, FileText, Loader2 } from "lucide-react";
+// import CallDock from "./CallDock";
 
 export default function ProfileForm() {
   const navigate = useNavigate();
@@ -106,13 +107,9 @@ export default function ProfileForm() {
   // Call Gemini API to extract structured data
   const extractDataWithGemini = async (text) => {
     try {
-      // Replace with your actual Gemini API key
-      const API_KEY =
-        import.meta.env.VITE_GEMINI_API_KEY ||
-        "***REMOVED***";
-
-      if (API_KEY === "YOUR_GEMINI_API_KEY") {
-        throw new Error("Please add your Gemini API key");
+      const API_KEY = import.meta.env.VITE_GEMINI_API_KEY;
+      if (!API_KEY) {
+        throw new Error("VITE_GEMINI_API_KEY is not set in frontend/.env");
       }
 
       const prompt = `Extract the following information from this resume text and return it as a JSON object:
@@ -152,7 +149,7 @@ export default function ProfileForm() {
               },
             ],
           }),
-        }
+        },
       );
 
       if (!response.ok) {
@@ -322,7 +319,7 @@ export default function ProfileForm() {
     setFormData((prev) => ({
       ...prev,
       interests: prev.interests.filter(
-        (interest) => interest !== interestToRemove
+        (interest) => interest !== interestToRemove,
       ),
     }));
   };
@@ -661,6 +658,7 @@ export default function ProfileForm() {
                     "Submit Profile"
                   )}
                 </Button>
+                {/* <CallDock /> */}
               </div>
             </div>
           </CardContent>

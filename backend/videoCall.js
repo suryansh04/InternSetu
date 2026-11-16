@@ -13,19 +13,23 @@ app.use(cors());
 app.use(bodyParser.json({ limit: "20mb" }));
 
 // ----------------------------
-// CONFIG (keys embedded here for dev)
+// CONFIG: read from backend/.env (see .env.example)
 // ----------------------------
-const CLOUDINARY_CLOUD_NAME = "dpoxkzjsm";
-const CLOUDINARY_API_KEY = "***REMOVED***";
-const CLOUDINARY_API_SECRET = "***REMOVED***";
+try {
+  process.loadEnvFile(path.join(__dirname, ".env"));
+} catch {
+  // no .env file: fall back to variables already set in the environment
+}
 
-// Gemini API key (Google Generative Language)
-const GEMINI_API_KEY = "***REMOVED***";
+const {
+  CLOUDINARY_CLOUD_NAME,
+  CLOUDINARY_API_KEY,
+  CLOUDINARY_API_SECRET,
+  GEMINI_API_KEY,
+  DEEPGRAM_API_KEY,
+} = process.env;
 
-// Deepgram API key
-const DEEPGRAM_API_KEY = "***REMOVED***";
-
-const PORT = 4000; // Fixed: Changed from 8080 to match the actual listen port
+const PORT = Number(process.env.INTERVIEW_PORT) || 4000;
 const ATTEMPTS_FILE = path.join(process.cwd(), "attempts.json");
 const EVENTS_FILE = path.join(process.cwd(), "events.json");
 
@@ -80,7 +84,7 @@ async function saveAttemptMetadata(meta) {
 // ----------------------------
 async function callGemini(promptText, model = "gemini-2.5-flash") {
   if (!GEMINI_API_KEY) {
-    throw new Error("GEMINI_API_KEY not set in server.js");
+    throw new Error("GEMINI_API_KEY is not set in backend/.env");
   }
 
   const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`;
@@ -395,8 +399,8 @@ async function processAttemptFile(meta) {
 // ----------------------------
 // Start server
 // ----------------------------
-app.listen(4000, () => {
-  console.log(`Interview server listening on port ${4000}`);
+app.listen(PORT, () => {
+  console.log(`Interview server listening on port ${PORT}`);
   console.log(`Node version: ${process.version}`);
   console.log(`fetch available: ${typeof fetch === "function"}`);
   console.log(`Cloudinary uploads: interview_attempts/<sessionId>`);
