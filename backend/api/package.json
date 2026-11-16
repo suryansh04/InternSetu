@@ -1,0 +1,26 @@
+{
+  "name": "internsetu-api",
+  "version": "1.0.0",
+  "private": true,
+  "description": "InternSetu API: resume parsing and AI mock interviews",
+  "type": "module",
+  "main": "src/server.js",
+  "scripts": {
+    "start": "node src/server.js",
+    "dev": "node --watch src/server.js",
+    "test": "node --test"
+  },
+  "engines": {
+    "node": ">=20.12"
+  },
+  "license": "UNLICENSED",
+  "dependencies": {
+    "@supabase/supabase-js": "^2.119.0",
+    "cloudinary": "^2.7.0",
+    "cors": "^2.8.5",
+    "express": "^5.1.0",
+    "express-rate-limit": "^8.7.4",
+    "multer": "^2.0.2",
+    "pdf-parse": "^1.1.1"
+  }
+}
