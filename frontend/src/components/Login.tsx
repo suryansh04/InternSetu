@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Link, useNavigate, useLocation } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { Input } from "@/shadcn/ui/input";
 import { Label } from "@/shadcn/ui/label";
 import { Button } from "@/shadcn/ui/button";
@@ -13,11 +13,9 @@ const LoginPage = () => {
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
-  const location = useLocation();
   const { login, signInWithGoogle } = useAuthContext();
 
   const { email, password } = formData;
-  const from = (location.state as any)?.from?.pathname || "/dashboard";
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setFormData({
@@ -33,28 +31,11 @@ const LoginPage = () => {
 
     try {
       await login(email, password);
-      navigate(from, { replace: true });
-
-      // Redirect to dashboard
-      navigate("/form");
+      navigate("/form", { replace: true });
     } catch (error: any) {
-      let errorMessage =
+      const errorMessage =
+        error.message ||
         "Failed to sign in. Please check your email and password.";
-
-      if (error.code === "auth/invalid-credential") {
-        errorMessage = "Invalid email or password. Please try again.";
-      } else if (error.code === "auth/too-many-requests") {
-        errorMessage =
-          "Too many failed attempts. Please try again later or reset your password.";
-      } else if (
-        error.code === "auth/user-not-found" ||
-        error.code === "auth/wrong-password"
-      ) {
-        errorMessage = "Invalid email or password. Please try again.";
-      } else {
-        console.error("Login error:", error);
-      }
-
       setError(errorMessage);
     } finally {
       setLoading(false);
@@ -65,13 +46,8 @@ const LoginPage = () => {
     try {
       setLoading(true);
       setError("");
-      // Wait for the sign-in to complete
+      // Redirects to Google, then back to /form signed in
       await signInWithGoogle();
-
-      // After successful sign-in, redirect to the dashboard
-      // The from parameter is set by ProtectedRoute when redirecting to login
-      const from = location.state?.from?.pathname || "/dashboard";
-      navigate(from, { replace: true });
     } catch (error: any) {
       setError(error.message || "Failed to sign in with Google");
     } finally {

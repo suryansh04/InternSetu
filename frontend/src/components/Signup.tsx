@@ -31,8 +31,12 @@ const SignupPage = () => {
     setLoading(true);
 
     try {
-      await signup(email, password, name);
-      navigate("/login");
+      const user = await signup(email, password, name);
+      if (user) {
+        navigate("/form");
+      } else {
+        setError("Check your email for a confirmation link, then sign in.");
+      }
     } catch (error: any) {
       console.error("Signup error:", error);
       setError(error.message || "Failed to create an account");
@@ -144,7 +148,6 @@ const SignupPage = () => {
                 setLoading(true);
                 setError("");
                 await signInWithGoogle();
-                navigate("/dashboard");
               } catch (error: any) {
                 setError(error.message || "Failed to sign in with Google");
               } finally {

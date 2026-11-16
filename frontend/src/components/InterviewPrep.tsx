@@ -447,7 +447,31 @@ export default function InterviewFlow({
 
         <div>
           <div className="text-xs text-gray-500 mb-2">Camera preview</div>
-          <PreviewBox />
+          <div className="aspect-video w-full overflow-hidden rounded-md bg-gray-900">
+            {previewActive ? (
+              <video
+                // Re-attach the stream whenever this element is (re)mounted.
+                ref={(el) => {
+                  videoRef.current = el;
+                  if (el && streamRef.current && el.srcObject !== streamRef.current) {
+                    el.srcObject = streamRef.current;
+                    el.play().catch(() => {});
+                  }
+                }}
+                autoPlay
+                muted
+                playsInline
+                className="h-full w-full object-cover"
+              />
+            ) : (
+              <div className="flex h-full items-center justify-center text-xs text-gray-400">
+                Camera off. Press Preview to test it.
+              </div>
+            )}
+          </div>
+          {previewError && (
+            <p className="mt-2 text-xs text-red-600">{previewError}</p>
+          )}
         </div>
       </div>
     );

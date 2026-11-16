@@ -338,32 +338,44 @@ async function processAttemptFile(meta) {
     }
 
     const scoringPrompt = `
-// You are an objective grader. Given the QUESTION and the CANDIDATE TRANSCRIPT below, assign integer scores (0-10) for each criterion: fluency, correctness, grammar, stammering (higher = fewer stammers), and content. Each criterion is worth 10 points. The total must equal 50.
+You are an objective interview grader. Given the QUESTION and the CANDIDATE TRANSCRIPT below, give an integer score from 0 to 10 for each criterion: fluency, correctness, grammar, stammering (higher = fewer stammers) and content. "total" is the sum of the five scores (0 to 50). Score only what the candidate actually said.
 
-// Return EXACTLY a JSON object and NOTHING else with the fields:
-// {
-//   "fluency": <int>,
-//   "correctness": <int>,
-//   "grammar": <int>,
-//   "stammering": <int>,
-//   "content": <int>,
-//   "total": <int>, 
-//   "notes": "<short explanation>"
-// }
+Return EXACTLY a JSON object and nothing else:
+{
+  "fluency": <int>,
+  "correctness": <int>,
+  "grammar": <int>,
+  "stammering": <int>,
+  "content": <int>,
+  "total": <int>,
+  "notes": "<short explanation>"
+}
 
-// QUESTION:
-// ${questionText}
+QUESTION:
+${questionText}
 
-// TRANSCRIPT:
-// ${transcript || "(empty)"}
+TRANSCRIPT:
+${transcript}
 `;
 
+    const criteria = ["fluency", "correctness", "grammar", "stammering", "content"];
     let scoring = null;
+    if (!transcript.trim()) {
+      // Nothing was said (or transcription failed): nothing to grade.
+      scoring = {
+        ...Object.fromEntries(criteria.map((c) => [c, 0])),
+        total: 0,
+        notes: "No speech was detected in this answer.",
+      };
+    }
     try {
-      if (GEMINI_API_KEY) {
+      if (!scoring && GEMINI_API_KEY) {
         const gResp = await callGemini(scoringPrompt);
         const parsed = extractJson(gResp);
-        if (parsed && typeof parsed.total === "number") {
+        if (parsed && criteria.every((c) => Number.isFinite(parsed[c]))) {
+          // Clamp each part to 0-10 and recompute the total ourselves.
+          for (const c of criteria) parsed[c] = Math.max(0, Math.min(10, Math.round(parsed[c])));
+          parsed.total = criteria.reduce((sum, c) => sum + parsed[c], 0);
           scoring = parsed;
         }
       }

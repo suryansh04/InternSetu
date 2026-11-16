@@ -34,9 +34,7 @@ export default function MainScreen() {
             duration: item.internship?.duration_months
               ? `${item.internship.duration_months} months`
               : "Duration not specified",
-            stipend: item.internship?.stipend
-              ? `₹${item.internship.stipend}`
-              : "Stipend not mentioned",
+            stipend: item.internship?.stipend || "Stipend not mentioned",
             skills: item.internship?.skills_required || [],
             matchScore: Math.round(item.match?.score || 0),
           }));
@@ -71,7 +69,8 @@ export default function MainScreen() {
   };
 
   const renderContent = () => {
-    const currentPath = location.pathname;
+    // Sections live under /main (e.g. /main/saved); compare the part after it.
+    const currentPath = location.pathname.replace(/^\/main/, "") || "/";
 
     switch (currentPath) {
       case "/matches":

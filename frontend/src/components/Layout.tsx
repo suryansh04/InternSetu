@@ -36,7 +36,7 @@ export default function Layout() {
 
   const sidebarItems = [
     { icon: Target, label: "Top Matches", path: "/main" },
-    { icon: BookOpen, label: "Interview Prep", path: "/main/interview-prep" },
+    { icon: BookOpen, label: "Interview Prep", path: "/interview-prep" },
     { icon: Bookmark, label: "Saved", path: "/main/saved" },
     { icon: Send, label: "Applied", path: "/main/applied" },
     { icon: User, label: "Profile", path: "/main/profile" },

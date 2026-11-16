@@ -1,14 +1,13 @@
 import React, { createContext, useContext, ReactNode } from "react";
-import { useAuth } from "../hooks/useAuth";
-import { AuthUser } from "../types";
+import { useAuth, type AuthUser } from "../hooks/useAuth";
 
 interface AuthContextType {
   currentUser: AuthUser | null;
   loading: boolean;
   error: string | null;
-  signup: (email: string, password: string, name: string) => Promise<AuthUser>;
+  signup: (email: string, password: string, name: string) => Promise<AuthUser | null>;
   login: (email: string, password: string) => Promise<AuthUser>;
-  signInWithGoogle: () => Promise<AuthUser>;
+  signInWithGoogle: () => Promise<void>;
   logout: () => Promise<void>;
   resetPassword: (email: string) => Promise<void>;
 }

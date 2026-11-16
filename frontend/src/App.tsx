@@ -1,15 +1,13 @@
-import React from "react";
 import { Routes, Route, Navigate } from "react-router-dom";
 import FormComponent from "./components/FormComponent";
 import HomePage from "./components/HomePage";
-import Login from "./components/login";
-import Signup from "./components/signup";
+import Login from "./components/Login";
+import Signup from "./components/Signup";
 
 // Import the new Layout component and page components
 import Layout from "./components/Layout";
 import InterviewPrep from "./components/InterviewPrep";
 import MainScreen from "./components/MainScreen";
-import VapiWidget from "./components/VapiWidget";
 const App = () => {
   return (
     <div>
@@ -23,6 +21,7 @@ const App = () => {
         {/* Dashboard routes (with persistent sidebar) */}
         <Route path="/main" element={<Layout />}>
           <Route index element={<MainScreen />} />
+          <Route path="*" element={<MainScreen />} />
           {/* <Route index element={<MainScreen />} />
           <Route path="matches" element={<MainScreen />} /> */}
 
@@ -32,10 +31,9 @@ const App = () => {
           <Route path="settings" element={<Settings />} /> */}
         </Route>
 
-        {/* Legacy route - redirect old interview prep page */}
         <Route
-          path="/interview-prep"
-          element={<Navigate to="/main/interview-prep" replace />}
+          path="/main/interview-prep"
+          element={<Navigate to="/interview-prep" replace />}
         />
       </Routes>
     </div>

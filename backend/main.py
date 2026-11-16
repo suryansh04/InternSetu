@@ -6,10 +6,9 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
 from func import (
-    fetch_internships_from_firestore,
+    fetch_internships,
     build_vectorstore_from_internships,
     match_profile_to_internships,
-    init_firebase_admin,
     get_embeddings,
 )
 
@@ -41,8 +40,7 @@ class Profile(BaseModel):
 async def startup_event():
     """Initialize embeddings & vectorstore at startup.
     - create embeddings client on main event loop (required for gRPC async clients)
-    - init firebase admin (in executor)
-    - fetch internships (in executor)
+    - fetch internships from Supabase (in executor)
     - build/load chroma vectorstore (in executor)
     """
     global _VECTORSTORE, _INTERNSHIPS, _PERSIST_DIR
@@ -57,19 +55,11 @@ async def startup_event():
         print("Failed to init embeddings client at startup:", e)
         raise
 
-    # 2) Initialize firebase admin in thread (it's synchronous)
+    # 2) Fetch internships from Supabase (thread)
     try:
-        await loop.run_in_executor(None, init_firebase_admin)
-        print("Firebase admin initialized.")
+        internships = await loop.run_in_executor(None, fetch_internships, None)
     except Exception as e:
-        print("Failed to init firebase admin:", e)
-        raise
-
-    # 3) Fetch internships (thread)
-    try:
-        internships = await loop.run_in_executor(None, fetch_internships_from_firestore, None)
-    except Exception as e:
-        print("Failed to fetch internships from Firestore:", e)
+        print("Failed to fetch internships from Supabase:", e)
         internships = []
 
     if not internships:
@@ -80,7 +70,7 @@ async def startup_event():
 
     _INTERNSHIPS = internships
 
-    # 4) Build or load vectorstore (thread)
+    # 3) Build or load vectorstore (thread)
     try:
         print("Building/loading vectorstore (may take several seconds)...")
         _VECTORSTORE = await loop.run_in_executor(None, build_vectorstore_from_internships, internships, _PERSIST_DIR)

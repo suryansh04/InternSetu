@@ -1,15 +1,14 @@
 # func.py
 import os
 import json
+import hashlib
 import numpy as np
 from typing import List, Dict, Any, Optional
 
 from dotenv import load_dotenv
 load_dotenv()
 
-# Firebase admin
-import firebase_admin
-from firebase_admin import credentials, firestore
+import requests
 
 # LangChain components
 from langchain_google_genai import GoogleGenerativeAIEmbeddings
@@ -18,17 +17,15 @@ from langchain.docstore.document import Document
 from langchain.text_splitter import RecursiveCharacterTextSplitter
 
 # ---------- Config ----------
-FIRESTORE_COLLECTION = os.getenv("FIRESTORE_COLLECTION", "internships")
-FIREBASE_PROJECT_ID = os.getenv("FIREBASE_PROJECT_ID")
-SERVICE_ACCOUNT_PATH = os.getenv("GOOGLE_APPLICATION_CREDENTIALS", "firebase_key.json")
+SUPABASE_URL = (os.getenv("SUPABASE_URL") or "").rstrip("/")
+SUPABASE_SECRET_KEY = os.getenv("SUPABASE_SECRET_KEY")
+INTERNSHIPS_TABLE = os.getenv("INTERNSHIPS_TABLE", "internships")
 GOOGLE_API_KEY = os.getenv("GOOGLE_API_KEY")
 
-LLM_MODEL_NAME = "gemini-1.5-flash"
-EMBEDDING_MODEL_NAME = "models/embedding-001"
+EMBEDDING_MODEL_NAME = "models/gemini-embedding-001"
 
 # Globals
 _embeddings = None
-_firebase_client = None
 
 
 # ---------- Helpers ----------
@@ -46,40 +43,29 @@ def get_embeddings():
     return _embeddings
 
 
-def init_firebase_admin() -> firestore.Client:
-    """Initialize Firebase Admin SDK"""
-    global _firebase_client
-    if _firebase_client is not None:
-        return _firebase_client
+# ---------- Supabase ----------
+def fetch_internships(limit: Optional[int] = None) -> List[Dict[str, Any]]:
+    """Fetch internships from the Supabase `internships` table (PostgREST)."""
+    if not SUPABASE_URL or not SUPABASE_SECRET_KEY:
+        raise ValueError("SUPABASE_URL and SUPABASE_SECRET_KEY must be set in backend/.env")
 
-    if not FIREBASE_PROJECT_ID:
-        raise ValueError("FIREBASE_PROJECT_ID not found in environment")
-
-    if not firebase_admin._apps:
-        if not SERVICE_ACCOUNT_PATH or not os.path.exists(SERVICE_ACCOUNT_PATH):
-            raise FileNotFoundError(
-                f"Service account JSON not found at '{SERVICE_ACCOUNT_PATH}'. "
-                "Set GOOGLE_APPLICATION_CREDENTIALS in .env"
-            )
-        cred = credentials.Certificate(SERVICE_ACCOUNT_PATH)
-        firebase_admin.initialize_app(cred, {"projectId": FIREBASE_PROJECT_ID})
-
-    _firebase_client = firestore.client()
-    return _firebase_client
-
-
-# ---------- Firestore ----------
-def fetch_internships_from_firestore(limit: Optional[int] = None) -> List[Dict[str, Any]]:
-    """Fetch internships from Firestore"""
-    db = init_firebase_admin()
-    coll = db.collection(FIRESTORE_COLLECTION)
-
-    docs = coll.limit(limit).stream() if limit else coll.stream()
-    internships = []
-    for doc in docs:
-        data = doc.to_dict()
-        data["id"] = doc.id
-        internships.append(data)
+    params = {"select": "*", "order": "created_at.asc"}
+    if limit:
+        params["limit"] = str(limit)
+    headers = {"apikey": SUPABASE_SECRET_KEY}
+    if not SUPABASE_SECRET_KEY.startswith("sb_"):
+        # Legacy service_role JWT keys also need to be sent as a bearer token.
+        headers["Authorization"] = f"Bearer {SUPABASE_SECRET_KEY}"
+    resp = requests.get(
+        f"{SUPABASE_URL}/rest/v1/{INTERNSHIPS_TABLE}",
+        params=params,
+        headers=headers,
+        timeout=30,
+    )
+    resp.raise_for_status()
+    internships = resp.json()
+    for i in internships:
+        i["id"] = str(i["id"])
 
     print(f"Fetched {len(internships)} internships")
     return internships
@@ -132,50 +118,47 @@ def internship_to_document(internship: Dict[str, Any]) -> Document:
 def build_vectorstore_from_internships(
     internships: List[Dict[str, Any]], persist_directory: Optional[str] = None
 ) -> Chroma:
-    """Build or load Chroma vectorstore.
-    If persist_directory exists, load from it; otherwise build from documents and persist if directory provided.
+    """Build the Chroma vector store, or load it from disk if these exact internships
+    were already embedded. The collection name is a hash of the data, so any change
+    to the internships builds a fresh collection instead of serving stale results.
     """
     if not internships:
         raise ValueError("No internships provided")
 
-    # Convert internships to LangChain Documents and chunk them
     docs = [internship_to_document(i) for i in internships]
     splitter = RecursiveCharacterTextSplitter(chunk_size=1000, chunk_overlap=100)
     splits = splitter.split_documents(docs)
-
     embeddings = get_embeddings()
 
-    # If persist_directory exists on disk, try to load existing chroma
+    fingerprint = hashlib.sha256(
+        json.dumps(
+            [(d.metadata.get("id"), d.page_content) for d in docs] + [EMBEDDING_MODEL_NAME]
+        ).encode("utf-8")
+    ).hexdigest()[:16]
+    collection_name = f"internships_{fingerprint}"
+
     if persist_directory:
-        # create dir if not present
         os.makedirs(persist_directory, exist_ok=True)
-        # If Chroma persistence files are present, load the vectorstore
         try:
-            # Loading: Chroma can be constructed with persist_directory + embedding_function
-            vectorstore = Chroma(persist_directory=persist_directory, embedding_function=embeddings)
-            # Basic sanity check: ensure it has some items; if empty, rebuild
-            try:
-                count = vectorstore._collection.count()  # internal quick check (may vary by chromadb version)
-            except Exception:
-                count = None
+            vectorstore = Chroma(
+                collection_name=collection_name,
+                persist_directory=persist_directory,
+                embedding_function=embeddings,
+            )
+            count = vectorstore._collection.count()
             if count:
-                print(f"Loaded persisted Chroma with {count} items from {persist_directory}")
+                print(f"Loaded {count} cached chunks from {persist_directory}")
                 return vectorstore
         except Exception as e:
-            print(f"Could not load persisted Chroma (will rebuild): {e}")
+            print(f"Could not load cached Chroma (will rebuild): {e}")
 
-    # Build new vectorstore
-    vectorstore = Chroma.from_documents(splits, embeddings)
-    # Persist if asked
-    if persist_directory:
-        try:
-            vectorstore.persist(persist_directory)
-            print(f"Persisted Chroma to {persist_directory}")
-        except Exception as e:
-            # some versions require calling vectorstore._client.persist() or vectorstore.persist()
-            print(f"Warning: error while persisting Chroma: {e}")
-
-    print(f"Vectorstore with {len(splits)} chunks built")
+    vectorstore = Chroma.from_documents(
+        splits,
+        embeddings,
+        collection_name=collection_name,
+        persist_directory=persist_directory,
+    )
+    print(f"Vector store with {len(splits)} chunks built")
     return vectorstore
 
 

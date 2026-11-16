@@ -15,7 +15,7 @@
 ![LangChain](https://img.shields.io/badge/LangChain-1c3c3c?style=flat-square&logo=langchain&logoColor=white)
 ![Chroma](https://img.shields.io/badge/Chroma-vector_store-ff6446?style=flat-square)
 ![Gemini](https://img.shields.io/badge/Gemini-8e75b2?style=flat-square&logo=googlegemini&logoColor=white)
-![Firebase](https://img.shields.io/badge/Firebase-1c1c1c?style=flat-square&logo=firebase&logoColor=ffca28)
+![Supabase](https://img.shields.io/badge/Supabase-1c1c1c?style=flat-square&logo=supabase&logoColor=3ecf8e)
 
 **[How it works](#how-it-works)** · **[Run locally](#run-locally)** · **[API](#api)**
 
@@ -50,7 +50,7 @@ Finding an internship usually means scrolling long lists and guessing which ones
   </tr>
 </table>
 
-Also: email and Google sign-in through Firebase Auth, and a dashboard that keeps your matches for the session.
+Also: email and Google sign-in through Supabase Auth, and a dashboard that keeps your matches for the session.
 
 ## How it works
 
@@ -61,18 +61,18 @@ flowchart LR
     RP -- "plain text" --> FE
     FE -- "text" --> GM1["Gemini<br/>(profile extraction)"]
     FE -- "profile" --> MA["Matching API<br/>FastAPI :8000"]
-    MA <--> FS[("Firestore<br/>internships")]
+    MA <--> FS[("Supabase Postgres<br/>internships")]
     MA <--> VS[("Chroma<br/>vector store")]
     MA -. "embeddings" .-> GE["Gemini embeddings"]
     FE -- "role, recorded answers" --> IS["Interview server<br/>Express :4000"]
     IS --> CL[("Cloudinary<br/>video")]
     IS --> DG["Deepgram<br/>speech to text"]
     IS --> GM2["Gemini<br/>questions and scoring"]
-    FE <--> FA["Firebase Auth"]
+    FE <--> FA["Supabase Auth"]
 ```
 
 1. **Read the resume.** The React app sends the PDF to the resume parser, which returns the raw text with `pdf-parse`. Gemini then turns the text into a structured profile.
-2. **Index the internships.** When the matching API starts, it loads every internship from Firestore, turns each into a document (title, company, location, stipend, skills, description) and embeds it with Gemini embeddings into a Chroma vector store saved on disk.
+2. **Index the internships.** When the matching API starts, it loads every internship from the Supabase `internships` table, turns each into a document (title, company, location, stipend, skills, description) and embeds it with Gemini embeddings into a Chroma vector store saved on disk. The store is keyed by a hash of the data, so a restart reuses it and any change to the listings rebuilds it.
 3. **Match.** For a profile, the API finds the closest internships in Chroma, then scores each one:
 
    | Part | Weight | How it is measured |
@@ -94,13 +94,22 @@ flowchart LR
 | Matching API | Python 3.11, FastAPI, LangChain, Chroma, Gemini embeddings, NumPy |
 | Node services | Express 5, Multer, pdf-parse, Cloudinary SDK |
 | AI | Google Gemini (profile extraction, questions, scoring), Deepgram (speech to text) |
-| Data and auth | Firebase Auth, Cloud Firestore |
+| Data and auth | Supabase Postgres (row-level security) and Supabase Auth |
 
 ## Run locally
 
-**You need:** Node.js 20.12+, Python 3.11+, a [Firebase](https://console.firebase.google.com) project with Firestore and Auth turned on, a [Google AI Studio](https://aistudio.google.com/apikey) API key, a [Cloudinary](https://cloudinary.com) account and a [Deepgram](https://deepgram.com) API key.
+**You need:** Node.js 20.12+, Python 3.11+, a [Supabase](https://supabase.com) project, a [Google AI Studio](https://aistudio.google.com/apikey) API key, a [Cloudinary](https://cloudinary.com) account and a [Deepgram](https://deepgram.com) API key.
 
-**1. Firebase.** In your Firebase project, turn on Email/Password and Google sign-in. Add your internships to a Firestore collection called `internships`; each document can have `title`, `organization`, `location`, `duration_months`, `stipend`, `skills_required` (list), `skills_preferred` (list) and `description`. Then go to *Project settings → Service accounts*, generate a private key, and save it as `backend/firebase_key.json`. This file is git-ignored; never commit it.
+**1. Database and sign-in.** With the [Supabase CLI](https://supabase.com/docs/guides/local-development/cli/getting-started), link your project and push the schema, the 25 sample internships and the auth settings:
+
+```bash
+supabase login
+supabase link --project-ref <your-project-ref>
+supabase db push --include-seed   # tables, row-level security, sample internships
+supabase config push              # auth settings from supabase/config.toml
+```
+
+Or paste [`supabase/migrations/20261116000000_init.sql`](supabase/migrations/20261116000000_init.sql) and then [`supabase/seed.sql`](supabase/seed.sql) into the SQL editor. Email sign-up works straight away. For Google sign-in, turn on the Google provider in *Authentication → Sign In / Providers* with an OAuth client from Google Cloud.
 
 **2. Backend.** Three services run from `backend/`. Start each in its own terminal.
 
@@ -124,9 +133,8 @@ npm run interview
 
 | Variable | What it is |
 | --- | --- |
-| `GOOGLE_APPLICATION_CREDENTIALS` | Path to the Firebase service account JSON, e.g. `firebase_key.json` |
-| `FIREBASE_PROJECT_ID` | Your Firebase project ID |
-| `FIRESTORE_COLLECTION` | The internships collection, `internships` by default |
+| `SUPABASE_URL` | The Supabase project URL |
+| `SUPABASE_SECRET_KEY` | The Supabase secret key (server only, never in the frontend) |
 | `GOOGLE_API_KEY` | Google AI Studio key, used for embeddings |
 | `GEMINI_API_KEY` | Google AI Studio key, used for interview questions and scoring |
 | `CLOUDINARY_CLOUD_NAME` | Your Cloudinary cloud name |
@@ -145,9 +153,10 @@ npm run dev                        # http://localhost:5173
 
 | Variable | What it is |
 | --- | --- |
+| `VITE_SUPABASE_URL` | The Supabase project URL |
+| `VITE_SUPABASE_PUBLISHABLE_KEY` | The Supabase publishable key |
 | `VITE_GEMINI_API_KEY` | Google AI Studio key for reading resumes. It ships to the browser, so restrict it to your site in Google Cloud |
 | `VITE_VAPI_API_KEY` | Vapi public key (optional, for the voice interview experiment) |
-| `VITE_FIREBASE_*` | The six values from *Project settings → Your apps → Web app* |
 
 ## API
 
@@ -165,16 +174,20 @@ npm run dev                        # http://localhost:5173
 ```
 backend/
   main.py               Matching API (FastAPI): loads internships, serves /match
-  func.py               Firestore loading, Chroma vector store, the match score
+  func.py               Supabase loading, Chroma vector store, the match score
   server.js, app.js     Resume parser (Express)
   routes/ controllers/  PDF upload route and text extraction
   videoCall.js          Interview server: questions, uploads, transcription, scoring
 frontend/
   src/
     components/         home, sign-in and sign-up, profile form, matches dashboard, interview
-    contexts/ hooks/    auth state and Firebase Auth helpers
-    firebase/           Firebase client setup
+    contexts/ hooks/    auth state and Supabase Auth helpers
+    lib/                Supabase client
     shadcn/ aceternity/ UI building blocks
+supabase/
+  migrations/           tables, row-level security, new-user trigger
+  seed.sql              25 sample internships
+  config.toml           auth settings
 ```
 
 ## License

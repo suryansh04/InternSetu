@@ -132,11 +132,12 @@ export default function ProfileForm() {
       }`;
 
       const response = await fetch(
-        `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${API_KEY}`,
+        `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent`,
         {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
+            "x-goog-api-key": API_KEY,
           },
           body: JSON.stringify({
             contents: [
@@ -186,7 +187,7 @@ export default function ProfileForm() {
         extractedData.interests && extractedData.interests.length > 0
           ? extractedData.interests
           : prev.interests,
-      duration_month: extractedData.experience_months || prev.duration_month,
+      duration_month: extractedData.duration_months || prev.duration_month,
     }));
 
     // Clear any existing errors for fields that were filled
@@ -197,7 +198,7 @@ export default function ProfileForm() {
       delete newErrors.skills;
     if (extractedData.interests && extractedData.interests.length > 0)
       delete newErrors.interests;
-    if (extractedData.experience_months) delete newErrors.duration_month;
+    if (extractedData.duration_months) delete newErrors.duration_month;
     setErrors(newErrors);
   };
 
@@ -336,8 +337,13 @@ export default function ProfileForm() {
 
     if (validateForm()) {
       const interestArrtoString = formData.interests.join(", ");
-      const duplicateForm = { ...formData, interests: interestArrtoString };
-      delete duplicateForm.resume; // Remove resume file from submission data
+      // The matching API expects `duration_months` as a number.
+      const { resume: _resume, duration_month, ...rest } = formData;
+      const duplicateForm = {
+        ...rest,
+        duration_months: Number(duration_month),
+        interests: interestArrtoString,
+      };
       console.log(duplicateForm);
 
       setIsProcessing(true);
