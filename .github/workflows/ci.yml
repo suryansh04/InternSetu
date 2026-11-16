@@ -20,6 +20,7 @@ jobs:
           cache-dependency-path: frontend/package-lock.json
       - run: npm ci
       - run: npm run lint
+      - run: npm run format:check
       - run: npm run typecheck
       - run: npm test
       - run: npm run build
@@ -37,6 +38,9 @@ jobs:
           cache: npm
           cache-dependency-path: backend/api/package-lock.json
       - run: npm ci
+      - run: npm run lint
+      - run: npm run format:check
+      - run: npm run typecheck
       - run: npm test
 
   matching:
@@ -51,5 +55,8 @@ jobs:
           python-version: "3.11"
           cache: pip
           cache-dependency-path: backend/matching/requirements*.txt
-      - run: pip install -r requirements.txt -r requirements-dev.txt
+      - run: pip install -r requirements-dev.txt
+      - run: ruff check .
+      - run: ruff format --check .
+      - run: mypy
       - run: pytest -q

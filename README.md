@@ -18,7 +18,7 @@
 ![Gemini](https://img.shields.io/badge/Gemini-8e75b2?style=flat-square&logo=googlegemini&logoColor=white)
 ![Supabase](https://img.shields.io/badge/Supabase-1c1c1c?style=flat-square&logo=supabase&logoColor=3ecf8e)
 
-**[How it works](#how-it-works)** · **[Run locally](#run-locally)** · **[Testing](#testing)**
+**[How it works](#how-it-works)** · **[Run locally](#run-locally)** · **[Testing](#testing-and-code-quality)**
 
 </div>
 
@@ -117,7 +117,7 @@ How: pooled HTTPS connections and a query-embedding cache in the matching servic
 | Matching | Python 3.11, FastAPI, Chroma, NumPy, PyJWT |
 | AI | Gemini 2.5 Flash-Lite (profiles, questions, scoring), Gemini embeddings, Deepgram Nova-3 (speech to text) |
 | Data and auth | Supabase Postgres with row-level security, Supabase Auth (email and Google) |
-| Quality | Vitest, node:test, pytest, ESLint, GitHub Actions |
+| Quality | TypeScript strict, JSDoc type checking, mypy --strict, ESLint, Ruff, Prettier, Vitest + Testing Library, node:test, pytest, GitHub Actions |
 
 ## Run locally
 
@@ -161,7 +161,7 @@ cp .env.example .env    # SUPABASE_URL, SUPABASE_SECRET_KEY, GEMINI_API_KEY, COR
 python -m venv .venv
 source .venv/bin/activate    # Windows: .venv\Scripts\activate
 pip install -r requirements.txt
-uvicorn main:app --port 8000
+uvicorn main:build_app --factory --port 8000
 ```
 
 **4. Frontend**, on http://localhost:5173:
@@ -173,35 +173,47 @@ npm install
 npm run dev
 ```
 
-## Testing
+## Testing and code quality
 
-From the repository root:
+Each part has a linter, a formatter, a type checker and tests. From the repository root:
 
 ```bash
-(cd frontend && npm run lint && npm run typecheck && npm test)    # ESLint, tsc, Vitest
-(cd backend/api && npm test)                                       # node:test; routes run against fakes
-(cd backend/matching && pip install -r requirements-dev.txt && pytest)
+(cd frontend && npm run lint && npm run format:check && npm run typecheck && npm test)
+(cd backend/api && npm run lint && npm run format:check && npm run typecheck && npm test)
+(cd backend/matching && pip install -r requirements-dev.txt && ruff check . && ruff format --check . && mypy && pytest)
 ```
 
-GitHub Actions runs all three on every push and pull request.
+| Part | Checks | Tests cover |
+| --- | --- | --- |
+| Frontend | ESLint, Prettier, TypeScript strict | API client, validation, interview logic, components (Testing Library), hooks |
+| API | ESLint, Prettier, JSDoc types checked by `tsc` | Routes against fakes, auth, uploads, scoring success and failure paths, PDF parsing |
+| Matching | Ruff, `mypy --strict` | Scoring, incremental sync, the query cache, Supabase paging, the HTTP layer |
+
+GitHub Actions runs every check on each push and pull request.
 
 ## Project structure
 
 ```
 frontend/src/
-  pages/                  landing, sign-in, profile, matches, saved, applied, interview
-  components/             app shell, internship card, interview pieces, ui/ (shadcn)
-  hooks/                  auth and data hooks (TanStack Query)
-  lib/                    API client, Supabase client, types, validation
+  pages/                  one file per route
+  components/             app shell, internship card, tag input; interview/ and landing/ pieces; ui/ (shadcn)
+  hooks/                  auth, data (profile, matches, shortlists, attempts) and the interview session
+  lib/                    API client, Supabase client, types, limits, validation, pure helpers
 backend/api/src/
-  routes/                 /api/resume, /api/interview
+  routes/                 /api/resume, /api/interview: HTTP in and out only
   services/               resume parsing, interview questions and scoring
-  lib/  middleware/       Gemini, Deepgram, Cloudinary clients; auth and errors
+  prompts/                what is asked of Gemini, and the JSON schemas it answers in
+  repositories/           interview attempts in Supabase
+  lib/  middleware/       Gemini, Deepgram, Cloudinary and token clients; auth and errors
+  types.d.ts              the contracts between layers
 backend/matching/
-  main.py                 FastAPI app, auth, /match
-  matching.py             embeddings, Chroma-backed index with incremental sync, the match score
+  main.py                 FastAPI app factory: auth, /match, background sync
+  index.py                Chroma-backed index with incremental sync, scored in memory
+  scoring.py              the explainable match score (pure functions)
+  embeddings.py           Gemini embeddings with a query cache
+  sources.py  auth.py  config.py
 supabase/
-  migrations/             tables, row-level security, triggers
+  migrations/             tables, row-level security, indexes, constraints
   seed.sql                25 sample internships
 ```
 
