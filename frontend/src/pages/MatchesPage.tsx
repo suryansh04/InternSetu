@@ -3,7 +3,10 @@ import { EmptyState } from "@/components/EmptyState";
 import { InternshipCard } from "@/components/InternshipCard";
 import { PageLoader } from "@/components/PageLoader";
 import { Button } from "@/components/ui/button";
-import { isProfileComplete, useMatches, useProfile, useShortlists } from "@/hooks/useStudentData";
+import { useMatches } from "@/hooks/useMatches";
+import { useProfile } from "@/hooks/useProfile";
+import { useShortlists } from "@/hooks/useShortlists";
+import { isProfileComplete } from "@/lib/profile";
 
 export default function MatchesPage() {
   const profile = useProfile();
@@ -41,13 +44,15 @@ export default function MatchesPage() {
     );
   }
 
-
   return (
     <div className="mx-auto max-w-4xl space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <p className="text-sm text-muted-foreground">
           Ranked for {profile.data.skills.slice(0, 4).join(", ")}
-          {profile.data.skills.length > 4 ? ` and ${profile.data.skills.length - 4} more skills` : ""}.
+          {profile.data.skills.length > 4
+            ? ` and ${profile.data.skills.length - 4} more skills`
+            : ""}
+          .
         </p>
         <Button asChild variant="link" size="sm">
           <Link to="/profile">Edit profile</Link>

@@ -6,8 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useAuthContext } from "@/contexts/AuthContext";
-
-const MIN_PASSWORD = 8;
+import { MIN_PASSWORD_LENGTH } from "@/lib/limits";
 
 export default function SignupPage() {
   const { currentUser, signup, signInWithGoogle } = useAuthContext();
@@ -25,8 +24,8 @@ export default function SignupPage() {
   const onSubmit = async (e: FormEvent) => {
     e.preventDefault();
     setError(null);
-    if (password.length < MIN_PASSWORD) {
-      return setError(`Use at least ${MIN_PASSWORD} characters for your password.`);
+    if (password.length < MIN_PASSWORD_LENGTH) {
+      return setError(`Use at least ${MIN_PASSWORD_LENGTH} characters for your password.`);
     }
     setLoading(true);
     try {
@@ -57,8 +56,8 @@ export default function SignupPage() {
       <AuthCard title="Check your email">
         <div className="flex flex-col items-center gap-3 text-center text-sm text-muted-foreground">
           <MailCheck className="h-10 w-10 text-primary" />
-          We sent a confirmation link to <strong className="text-foreground">{email}</strong>. Open it
-          to finish creating your account.
+          We sent a confirmation link to <strong className="text-foreground">{email}</strong>. Open
+          it to finish creating your account.
         </div>
       </AuthCard>
     );
@@ -106,13 +105,13 @@ export default function SignupPage() {
             type="password"
             autoComplete="new-password"
             required
-            minLength={MIN_PASSWORD}
+            minLength={MIN_PASSWORD_LENGTH}
             value={password}
             onChange={(e) => setPassword(e.target.value)}
             aria-describedby="password-hint"
           />
           <p id="password-hint" className="text-xs text-muted-foreground">
-            At least {MIN_PASSWORD} characters.
+            At least {MIN_PASSWORD_LENGTH} characters.
           </p>
         </div>
         <Button type="submit" className="w-full" disabled={loading}>

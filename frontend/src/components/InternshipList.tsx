@@ -3,10 +3,11 @@ import { EmptyState } from "@/components/EmptyState";
 import { InternshipCard } from "@/components/InternshipCard";
 import { PageLoader } from "@/components/PageLoader";
 import { Button } from "@/components/ui/button";
-import { useProfile, useShortlists } from "@/hooks/useStudentData";
+import { useProfile } from "@/hooks/useProfile";
+import { useShortlists } from "@/hooks/useShortlists";
 
-/** Saved and Applied are the same page over different tables. */
-export function InternshipListPage({
+/** The Saved and Applied pages: the same list over different tables. */
+export function InternshipList({
   list,
   emptyTitle,
   emptyText,

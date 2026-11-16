@@ -7,8 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useAuthContext } from "@/contexts/AuthContext";
-
-const MIN_PASSWORD = 8;
+import { MIN_PASSWORD_LENGTH } from "@/lib/limits";
 
 /** Opened from the reset email: the link signs the user in, then they pick a new password. */
 export default function ResetPasswordPage() {
@@ -20,7 +19,10 @@ export default function ResetPasswordPage() {
 
   if (!currentUser) {
     return (
-      <AuthCard title="This link has expired" subtitle="Reset links work once and expire after an hour.">
+      <AuthCard
+        title="This link has expired"
+        subtitle="Reset links work once and expire after an hour."
+      >
         <Button asChild className="w-full">
           <Link to="/forgot-password">Send a new link</Link>
         </Button>
@@ -30,8 +32,8 @@ export default function ResetPasswordPage() {
 
   const onSubmit = async (e: FormEvent) => {
     e.preventDefault();
-    if (password.length < MIN_PASSWORD) {
-      return setError(`Use at least ${MIN_PASSWORD} characters.`);
+    if (password.length < MIN_PASSWORD_LENGTH) {
+      return setError(`Use at least ${MIN_PASSWORD_LENGTH} characters.`);
     }
     setError(null);
     setLoading(true);
@@ -55,7 +57,7 @@ export default function ResetPasswordPage() {
             type="password"
             autoComplete="new-password"
             required
-            minLength={MIN_PASSWORD}
+            minLength={MIN_PASSWORD_LENGTH}
             value={password}
             onChange={(e) => setPassword(e.target.value)}
           />

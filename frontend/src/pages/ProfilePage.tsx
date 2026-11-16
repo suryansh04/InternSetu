@@ -9,14 +9,20 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { isProfileComplete, useProfile, useSaveProfile } from "@/hooks/useStudentData";
+import { useProfile, useSaveProfile } from "@/hooks/useProfile";
+import { MAX_RESUME_MB, PROFILE_LIMITS } from "@/lib/limits";
+import { isProfileComplete } from "@/lib/profile";
 import { api } from "@/lib/api";
 import type { StudentProfile } from "@/lib/types";
 import { validateProfile, type ProfileErrors as Errors } from "@/lib/validation";
 
-const MAX_RESUME_MB = 5;
-
-const EMPTY: StudentProfile = { name: "", location: "", skills: [], interests: [], duration_months: 3 };
+const EMPTY: StudentProfile = {
+  name: "",
+  location: "",
+  skills: [],
+  interests: [],
+  duration_months: 3,
+};
 
 export default function ProfilePage() {
   const navigate = useNavigate();
@@ -30,7 +36,10 @@ export default function ProfilePage() {
   // Start from the saved profile, once it has loaded.
   useEffect(() => {
     if (saved.data) {
-      setForm({ ...saved.data, duration_months: saved.data.duration_months || EMPTY.duration_months });
+      setForm({
+        ...saved.data,
+        duration_months: saved.data.duration_months || EMPTY.duration_months,
+      });
     }
   }, [saved.data]);
 
@@ -105,8 +114,8 @@ export default function ProfilePage() {
               <h1 className="text-2xl">{firstTime ? "Set up your profile" : "Your profile"}</h1>
             </CardTitle>
             <CardDescription>
-              Upload your resume to fill this in automatically, or type it yourself. Your matches are
-              based on these details.
+              Upload your resume to fill this in automatically, or type it yourself. Your matches
+              are based on these details.
             </CardDescription>
           </CardHeader>
           <CardContent>
@@ -124,7 +133,7 @@ export default function ProfilePage() {
                 )}
                 <span className="flex-1">
                   <span className="block text-sm font-medium">
-                    {parsing ? "Reading your resume…" : resumeName ?? "Upload your resume"}
+                    {parsing ? "Reading your resume…" : (resumeName ?? "Upload your resume")}
                   </span>
                   <span className="block text-xs text-muted-foreground">
                     PDF, up to {MAX_RESUME_MB} MB. AI fills in the fields below.
@@ -144,6 +153,7 @@ export default function ProfilePage() {
                 <Input
                   id="name"
                   value={form.name}
+                  maxLength={PROFILE_LIMITS.nameLength}
                   onChange={(e) => update("name", e.target.value)}
                   autoComplete="name"
                   aria-invalid={!!errors.name || undefined}
@@ -151,10 +161,16 @@ export default function ProfilePage() {
                 />
               </Field>
 
-              <Field id="location" label="City" hint="Where you want to work, e.g. Pune, India." error={errors.location}>
+              <Field
+                id="location"
+                label="City"
+                hint="Where you want to work, e.g. Pune, India."
+                error={errors.location}
+              >
                 <Input
                   id="location"
                   value={form.location}
+                  maxLength={PROFILE_LIMITS.locationLength}
                   onChange={(e) => update("location", e.target.value)}
                   autoComplete="address-level2"
                   aria-invalid={!!errors.location || undefined}
@@ -172,17 +188,23 @@ export default function ProfilePage() {
                   id="skills"
                   value={form.skills}
                   onChange={(v) => update("skills", v)}
+                  max={PROFILE_LIMITS.skills}
                   placeholder="e.g. React"
                   invalid={!!errors.skills}
                   describedBy="skills-hint"
                 />
               </Field>
 
-              <Field id="interests" label="Interests" hint="Fields you would like to work in. Optional.">
+              <Field
+                id="interests"
+                label="Interests"
+                hint="Fields you would like to work in. Optional."
+              >
                 <TagInput
                   id="interests"
                   value={form.interests}
                   onChange={(v) => update("interests", v)}
+                  max={PROFILE_LIMITS.interests}
                   placeholder="e.g. Machine learning"
                   describedBy="interests-hint"
                 />
@@ -198,8 +220,8 @@ export default function ProfilePage() {
                   id="duration_months"
                   type="number"
                   inputMode="numeric"
-                  min={1}
-                  max={24}
+                  min={PROFILE_LIMITS.minMonths}
+                  max={PROFILE_LIMITS.maxMonths}
                   className="w-32"
                   value={form.duration_months || ""}
                   onChange={(e) => update("duration_months", Number(e.target.value))}

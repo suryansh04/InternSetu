@@ -103,7 +103,11 @@ export const useAuth = () => {
       // Token refreshes fire this hourly with the same user: keep the old object
       // so nothing that depends on currentUser re-renders.
       setCurrentUser((prev) =>
-        prev && next && prev.id === next.id && prev.email === next.email && prev.displayName === next.displayName
+        prev &&
+        next &&
+        prev.id === next.id &&
+        prev.email === next.email &&
+        prev.displayName === next.displayName
           ? prev
           : next,
       );

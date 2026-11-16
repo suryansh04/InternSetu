@@ -10,15 +10,29 @@ interface TagInputProps {
   placeholder: string;
   invalid?: boolean;
   describedBy?: string;
+  /** Most tags allowed; the input is disabled once reached. */
+  max?: number;
+  /** Longest single tag. */
+  maxLength?: number;
 }
 
 /** A list of short tags: type and press Enter (or comma) to add, click × to remove. */
-export function TagInput({ id, value, onChange, placeholder, invalid, describedBy }: TagInputProps) {
+export function TagInput({
+  id,
+  value,
+  onChange,
+  placeholder,
+  invalid,
+  describedBy,
+  max = Infinity,
+  maxLength = 60,
+}: TagInputProps) {
+  const full = value.length >= max;
   const [draft, setDraft] = useState("");
 
   const add = () => {
     const tag = draft.trim().replace(/,$/, "");
-    if (tag && !value.some((t) => t.toLowerCase() === tag.toLowerCase())) {
+    if (tag && !full && !value.some((t) => t.toLowerCase() === tag.toLowerCase())) {
       onChange([...value, tag]);
     }
     setDraft("");
@@ -59,14 +73,23 @@ export function TagInput({ id, value, onChange, placeholder, invalid, describedB
         <Input
           id={id}
           value={draft}
-          placeholder={placeholder}
+          placeholder={full ? `Up to ${max}` : placeholder}
+          maxLength={maxLength}
+          disabled={full}
           onChange={(e) => setDraft(e.target.value)}
           onKeyDown={onKeyDown}
           onBlur={add}
           aria-invalid={invalid || undefined}
           aria-describedby={describedBy}
         />
-        <Button type="button" variant="outline" size="icon" onClick={add} disabled={!draft.trim()} aria-label="Add">
+        <Button
+          type="button"
+          variant="outline"
+          size="icon"
+          onClick={add}
+          disabled={full || !draft.trim()}
+          aria-label="Add"
+        >
           <Plus />
         </Button>
       </div>

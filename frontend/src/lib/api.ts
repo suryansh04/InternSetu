@@ -21,7 +21,10 @@ function errorMessage(body: unknown, status: number): string {
   if (typeof b?.detail === "string") return b.detail;
   if (Array.isArray(b?.detail)) {
     return b.detail
-      .map((d: { loc?: unknown[]; msg?: string }) => `${d.loc?.at(-1) ?? "input"}: ${d.msg ?? "invalid"}`)
+      .map(
+        (d: { loc?: unknown[]; msg?: string }) =>
+          `${d.loc?.at(-1) ?? "input"}: ${d.msg ?? "invalid"}`,
+      )
       .join("; ");
   }
   return `Request failed (${status}).`;

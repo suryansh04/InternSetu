@@ -143,8 +143,12 @@
 }
 
 @keyframes landing-title-shine {
-  from { background-position: 200% center; }
-  to { background-position: -200% center; }
+  from {
+    background-position: 200% center;
+  }
+  to {
+    background-position: -200% center;
+  }
 }
 
 .landing-fade-in {
@@ -152,7 +156,9 @@
 }
 
 @keyframes landing-fade-in {
-  from { opacity: 0; }
+  from {
+    opacity: 0;
+  }
 }
 
 /* One line travels out from the centre, then rests for the remaining 40% of its cycle. */
@@ -167,17 +173,34 @@
 }
 
 @keyframes landing-line {
-  0% { stroke-dashoffset: 800; stroke-dasharray: 50 800; opacity: 0; }
-  15% { opacity: 1; }
-  45% { opacity: 1; }
-  60% { stroke-dashoffset: 0; stroke-dasharray: 20 800; opacity: 0; }
-  100% { stroke-dashoffset: 0; opacity: 0; }
+  0% {
+    stroke-dashoffset: 800;
+    stroke-dasharray: 50 800;
+    opacity: 0;
+  }
+  15% {
+    opacity: 1;
+  }
+  45% {
+    opacity: 1;
+  }
+  60% {
+    stroke-dashoffset: 0;
+    stroke-dasharray: 20 800;
+    opacity: 0;
+  }
+  100% {
+    stroke-dashoffset: 0;
+    opacity: 0;
+  }
 }
 
 .landing-reveal {
   opacity: 0;
   transform: translateY(20px);
-  transition: opacity 0.6s ease-out, transform 0.6s ease-out;
+  transition:
+    opacity 0.6s ease-out,
+    transform 0.6s ease-out;
 }
 
 .landing-reveal.is-visible {

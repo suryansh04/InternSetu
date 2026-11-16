@@ -6,7 +6,13 @@ import { cn } from "@/lib/utils";
  * the `landing-line` keyframes (index.css) with its own speed and start time, so
  * the effect costs no JavaScript per frame and stops for prefers-reduced-motion.
  */
-export function BackgroundLines({ children, className }: { children: ReactNode; className?: string }) {
+export function BackgroundLines({
+  children,
+  className,
+}: {
+  children: ReactNode;
+  className?: string;
+}) {
   return (
     <div
       className={cn(

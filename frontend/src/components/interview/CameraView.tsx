@@ -2,7 +2,13 @@ import { useEffect, useRef } from "react";
 import { cn } from "@/lib/utils";
 
 /** Shows a live camera stream, mirrored like a selfie view. */
-export function CameraView({ stream, className }: { stream: MediaStream | null; className?: string }) {
+export function CameraView({
+  stream,
+  className,
+}: {
+  stream: MediaStream | null;
+  className?: string;
+}) {
   const videoRef = useRef<HTMLVideoElement>(null);
 
   useEffect(() => {

@@ -52,10 +52,7 @@ const GlowingEffect = memo(
           }
 
           const center = [left + width * 0.5, top + height * 0.5];
-          const distanceFromCenter = Math.hypot(
-            mouseX - center[0],
-            mouseY - center[1]
-          );
+          const distanceFromCenter = Math.hypot(mouseX - center[0], mouseY - center[1]);
           const inactiveRadius = 0.5 * Math.min(width, height) * inactiveZone;
 
           if (distanceFromCenter < inactiveRadius) {
@@ -73,12 +70,9 @@ const GlowingEffect = memo(
 
           if (!isActive) return;
 
-          const currentAngle =
-            parseFloat(element.style.getPropertyValue("--start")) || 0;
+          const currentAngle = parseFloat(element.style.getPropertyValue("--start")) || 0;
           const targetAngle =
-            (180 * Math.atan2(mouseY - center[1], mouseX - center[0])) /
-              Math.PI +
-            90;
+            (180 * Math.atan2(mouseY - center[1], mouseX - center[0])) / Math.PI + 90;
 
           const angleDiff = ((targetAngle - currentAngle + 180) % 360) - 180;
           const newAngle = currentAngle + angleDiff;
@@ -90,13 +84,16 @@ const GlowingEffect = memo(
           const step = (now: number) => {
             const t = Math.min(1, (now - startedAt) / (movementDuration * 1000));
             const eased = 1 - Math.pow(2, -10 * t); // ease-out-expo
-            element.style.setProperty("--start", String(currentAngle + (newAngle - currentAngle) * eased));
+            element.style.setProperty(
+              "--start",
+              String(currentAngle + (newAngle - currentAngle) * eased),
+            );
             if (t < 1) tweenRef.current = requestAnimationFrame(step);
           };
           tweenRef.current = requestAnimationFrame(step);
         });
       },
-      [inactiveZone, proximity, movementDuration]
+      [inactiveZone, proximity, movementDuration],
     );
 
     useEffect(() => {
@@ -125,7 +122,7 @@ const GlowingEffect = memo(
             "pointer-events-none absolute -inset-px hidden rounded-[inherit] border opacity-0 transition-opacity",
             glow && "opacity-100",
             variant === "white" && "border-white",
-            disabled && "!block"
+            disabled && "!block",
           )}
         />
         <div
@@ -164,7 +161,7 @@ const GlowingEffect = memo(
             glow && "opacity-100",
             blur > 0 && "blur-[var(--blur)] ",
             className,
-            disabled && "!hidden"
+            disabled && "!hidden",
           )}
         >
           <div
@@ -177,13 +174,13 @@ const GlowingEffect = memo(
               "after:opacity-[var(--active)] after:transition-opacity after:duration-300",
               "after:[mask-clip:padding-box,border-box]",
               "after:[mask-composite:intersect]",
-              "after:[mask-image:linear-gradient(#0000,#0000),conic-gradient(from_calc((var(--start)-var(--spread))*1deg),#00000000_0deg,#fff,#00000000_calc(var(--spread)*2deg))]"
+              "after:[mask-image:linear-gradient(#0000,#0000),conic-gradient(from_calc((var(--start)-var(--spread))*1deg),#00000000_0deg,#fff,#00000000_calc(var(--spread)*2deg))]",
             )}
           />
         </div>
       </>
     );
-  }
+  },
 );
 
 GlowingEffect.displayName = "GlowingEffect";

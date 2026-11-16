@@ -63,11 +63,7 @@ interface GridItemProps {
   icon: ReactNode;
 }
 
-const GridItem = ({
-  title,
-  description,
-  icon,
-}: GridItemProps) => {
+const GridItem = ({ title, description, icon }: GridItemProps) => {
   return (
     <li className="min-h-[14rem] list-none">
       <div className="relative h-full rounded-2xl border p-2 transition-all duration-300 hover:shadow-lg md:rounded-3xl md:p-3 dark:border-gray-800">
@@ -99,4 +95,3 @@ const GridItem = ({
     </li>
   );
 };
-

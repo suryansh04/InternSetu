@@ -37,29 +37,51 @@ describe("api", () => {
 
   it("only sends the fields the matching API needs", async () => {
     fetchMock.mockResolvedValue(reply(200, { matches: [] }));
-    await api.matches({ name: "A", location: "Pune", skills: ["Go"], interests: [], duration_months: 3 });
+    await api.matches({
+      name: "A",
+      location: "Pune",
+      skills: ["Go"],
+      interests: [],
+      duration_months: 3,
+    });
     const body = JSON.parse(fetchMock.mock.calls[0][1].body);
     expect(body).toEqual({ skills: ["Go"], interests: [], location: "Pune", duration_months: 3 });
   });
 
   it("surfaces the server's error message (Express style)", async () => {
     fetchMock.mockResolvedValue(reply(415, { error: "Only PDF resumes are supported." }));
-    await expect(api.parseResume(new File(["x"], "a.pdf"))).rejects.toThrow("Only PDF resumes are supported.");
+    await expect(api.parseResume(new File(["x"], "a.pdf"))).rejects.toThrow(
+      "Only PDF resumes are supported.",
+    );
   });
 
   it("surfaces the server's error message (FastAPI style)", async () => {
     fetchMock.mockResolvedValue(reply(401, { detail: "Sign in to see matches." }));
     await expect(
-      api.matches({ name: "A", location: "Pune", skills: ["Go"], interests: [], duration_months: 3 }),
+      api.matches({
+        name: "A",
+        location: "Pune",
+        skills: ["Go"],
+        interests: [],
+        duration_months: 3,
+      }),
     ).rejects.toThrow("Sign in to see matches.");
   });
 
   it("turns FastAPI validation errors into one readable line", async () => {
     fetchMock.mockResolvedValue(
-      reply(422, { detail: [{ loc: ["body", "location"], msg: "String should have at most 120 characters" }] }),
+      reply(422, {
+        detail: [{ loc: ["body", "location"], msg: "String should have at most 120 characters" }],
+      }),
     );
     await expect(
-      api.matches({ name: "A", location: "x".repeat(130), skills: ["Go"], interests: [], duration_months: 3 }),
+      api.matches({
+        name: "A",
+        location: "x".repeat(130),
+        skills: ["Go"],
+        interests: [],
+        duration_months: 3,
+      }),
     ).rejects.toThrow("location: String should have at most 120 characters");
   });
 

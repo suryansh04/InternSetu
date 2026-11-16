@@ -9,7 +9,10 @@ import { Button } from "@/components/ui/button";
 import { useAuthContext } from "@/contexts/AuthContext";
 
 const steps = [
-  { title: "Create an account", description: "Sign up with your email or Google in a few seconds." },
+  {
+    title: "Create an account",
+    description: "Sign up with your email or Google in a few seconds.",
+  },
   {
     title: "Upload your resume",
     description: "AI fills in your profile. Check it, add anything it missed, and save.",

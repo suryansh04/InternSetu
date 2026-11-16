@@ -16,7 +16,7 @@ import {
   SidebarTrigger,
 } from "@/components/ui/sidebar";
 import { useAuthContext } from "@/contexts/AuthContext";
-import { useProfile } from "@/hooks/useStudentData";
+import { useProfile } from "@/hooks/useProfile";
 
 const navItems = [
   { icon: Target, label: "Top matches", path: "/app" },

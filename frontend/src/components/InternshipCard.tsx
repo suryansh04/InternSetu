@@ -53,7 +53,10 @@ export const InternshipCard = memo(function InternshipCard({
           </div>
           {score !== undefined && (
             <span
-              className={cn("shrink-0 rounded-full px-3 py-1 text-sm font-semibold", scoreTone(score))}
+              className={cn(
+                "shrink-0 rounded-full px-3 py-1 text-sm font-semibold",
+                scoreTone(score),
+              )}
               aria-label={`Match score ${Math.round(score)} out of 100`}
             >
               {Math.round(score)}% match
@@ -89,7 +92,9 @@ export const InternshipCard = memo(function InternshipCard({
                 key={skill}
                 className={cn(
                   "inline-flex items-center gap-1 rounded-md px-2 py-0.5 text-xs font-medium",
-                  have ? "bg-emerald-50 text-emerald-800" : "bg-secondary text-secondary-foreground",
+                  have
+                    ? "bg-emerald-50 text-emerald-800"
+                    : "bg-secondary text-secondary-foreground",
                 )}
               >
                 {have && <Check className="h-3 w-3" aria-label="You have this skill" />}
@@ -107,7 +112,10 @@ export const InternshipCard = memo(function InternshipCard({
                 <div key={key} className="grid grid-cols-[10rem_1fr_3rem] items-center gap-3">
                   <dt className="text-muted-foreground">{PART_LABELS[key]}</dt>
                   <dd className="h-2 overflow-hidden rounded-full bg-muted">
-                    <div className="h-full rounded-full bg-primary" style={{ width: `${parts[key]}%` }} />
+                    <div
+                      className="h-full rounded-full bg-primary"
+                      style={{ width: `${parts[key]}%` }}
+                    />
                   </dd>
                   <dd className="text-right tabular-nums">{Math.round(parts[key])}%</dd>
                 </div>
@@ -117,7 +125,12 @@ export const InternshipCard = memo(function InternshipCard({
         )}
 
         <div className="flex gap-2">
-          <Button variant="outline" size="sm" onClick={() => onToggleSaved(internship)} aria-pressed={isSaved}>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => onToggleSaved(internship)}
+            aria-pressed={isSaved}
+          >
             {isSaved ? <BookmarkCheck /> : <Bookmark />}
             {isSaved ? "Saved" : "Save"}
           </Button>
